@@ -7,6 +7,9 @@
 #include "spectralFlux.h"
 #include <Eigen\Dense>
 #include "utils.cpp"
+#include "PCA.h"
+#include "ofxUI.h"
+#include "Graph.h"
 
 using namespace Eigen;
 using namespace std;
@@ -17,6 +20,7 @@ class testApp : public ofBaseApp{
 		void setup();
 		void update();
 		void draw();
+		void exit();
 
 		void keyPressed  (int key);
 		void keyReleased(int key);
@@ -29,9 +33,13 @@ class testApp : public ofBaseApp{
 		void gotMessage(ofMessage msg);
 
 		void audioOut(float * input, int bufferSize, int nChannels);
+
+		Matrix<float, 1, Dynamic> returnMatrix(int length);
 		///////////////////////////////////////////////////////////
 		//                    AUDIO MEMBERS                      //
 		///////////////////////////////////////////////////////////
+		MatrixXf data;
+
 		ofSoundStream soundStream;
 		int bufferSize, sampleRate;
 
@@ -40,27 +48,29 @@ class testApp : public ofBaseApp{
 		ofxMaxiOsc osc;
 		ofxMaxiSample sampl;
 
-		//ofxMaxiFFT fft;
 		spectralFlux* flux;
-
-		//float* flux_history;
+		
 		///////////////////////////////////////////////////////////
 		//                     PLOTTING                          //
 		///////////////////////////////////////////////////////////
 		ofFbo fbo;
-
 		wavePlotter plotter;
 		wavePlotter plotter2;
-
+		wavePlotter plotter3;
+		bool onsets;
 		float needle_x, needle_y;
 
+		Graph graph, graph2;
 		
+		// -------- GUI ------- //
+		ofxUICanvas *gui;   	
+	    void guiEvent(ofxUIEventArgs &e);
 
 		
-
 		/////////////////////////////////////////////////////////////
 		//                       OTHER                            //
 		/////////////////////////////////////////////////////////////
+		PCA pca;
 		
 
 };

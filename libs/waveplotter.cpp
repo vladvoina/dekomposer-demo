@@ -1,9 +1,11 @@
  #include "waveplotter.h"
 
 
-void wavePlotter::setProperties(float x1, float y1, float w1, float h1, ofColor col1, string s, int data_size)
+void wavePlotter::setProperties(float x1, float y1, float w1, float h1, ofColor col1, string s, int data_size, bool back)
 {
   line_weight = 1;
+
+  background = back;
 
   x = x1;
   y = y1;
@@ -18,12 +20,21 @@ void wavePlotter::setProperties(float x1, float y1, float w1, float h1, ofColor 
  //  <!> this assignment might pe problematic
   color = col1;
 
+  data_start_index = 0;
+  data_end_index = DATA_SIZE;
 }
 
 void wavePlotter::setRange(float low, float high)
 {
   lowRange = low;
   highRange = high;
+}
+
+// pass in percentages
+void wavePlotter::setDisplayWindow(float low, float high)
+{
+	data_start_index = ofMap(low, 0, 100.0, 0, DATA_SIZE, true);
+	data_end_index   = ofMap(high, 0, 100.0, 0, DATA_SIZE, true); 
 }
 
 void wavePlotter::autoScaleRange(short * data)
@@ -44,73 +55,71 @@ void wavePlotter::autoScaleRange(double * data)
 	highRange = Utils::ofMax(data, DATA_SIZE);
 }
 
-void wavePlotter::draw(double * data)
+void wavePlotter::startStyle()
 {
-
 	ofPushStyle();
 		ofPushMatrix();
-		ofTranslate(x, y, 0); // position
-			
-		ofSetColor(225);
-		ofDrawBitmapString(label, 0, -2);
-		
+		ofTranslate(x, y, 0); // position		
 		// background
-	
-		ofSetColor(34, 34, 34);
+	    if (background)
+		{
+		ofSetColor(20, 20, 20);
 		ofFill();
 		ofRect(0, 0, width, height);
-
+		}
 		// frame
 		ofSetColor(255);
 		ofSetLineWidth(2);
 		ofNoFill();
-		ofRect(0, 0, width, height);
-		
+		ofRect(0, 0, width, height);	
 		// content
 		ofSetColor(color);
 		ofSetLineWidth(line_weight);
-					
+}
+
+void wavePlotter::endStyle()
+{
+	     // text
+		 ofSetColor(225);
+		 ofDrawBitmapString(label, 0, -2);
+
+		ofPopMatrix();
+	ofPopStyle();
+}
+
+void wavePlotter::draw(double * data)
+{
+	startStyle();
 			ofBeginShape();
+			for (int i=0; i<width; i++)
+			{
+				int index = (int) ofMap(i, 0, width, data_start_index, data_end_index);
+				float ty =  ofMap(data[index], lowRange, highRange, height, 0, false);
+				ofVertex(i, ty);
+			}
+			/*
 			for (int i = 0; i < DATA_SIZE; i++)
 			{
 				float tx =  ofMap(i, 0, DATA_SIZE, 0, width, true);
 				float ty =  ofMap(data[i], lowRange, highRange, height, 0, false);
 				
 				ofVertex(tx, ty);
-			}
-			ofEndShape(false);
-			
-		ofPopMatrix();
-	ofPopStyle();
+			}*/
+			ofEndShape(false);		
+	endStyle();
 }
 
 void wavePlotter::draw(float * data)
 {
-
-	ofPushStyle();
-		ofPushMatrix();
-		ofTranslate(x, y, 0); // position
-			
-		ofSetColor(225);
-		//ofDrawBitmapString(label, 0, -2);
-		
-		// background
-	
-		ofSetColor(34, 34, 34);
-		ofFill();
-		ofRect(0, 0, width, height);
-
-		// frame
-		ofSetColor(255);
-		ofSetLineWidth(2);
-		ofNoFill();
-		ofRect(0, 0, width, height);
-		
-		// content
-		ofSetColor(color);
-		ofSetLineWidth(line_weight);
-					
+	startStyle();
 			ofBeginShape();
+			for (int i=0; i<width; i++)
+			{
+				int index = (int) ofMap(i, 0, width, data_start_index, data_end_index);
+				float ty =  ofMap(data[index], lowRange, highRange, height, 0, false);
+				ofVertex(i, ty);
+			}
+			/*
 			for (int i = 0; i < DATA_SIZE; i++)
 			{
 				float tx =  ofMap(i, 0, DATA_SIZE, 0, width, true);
@@ -118,41 +127,23 @@ void wavePlotter::draw(float * data)
 				
 				ofVertex(tx, ty);
 			}
+			*/
 			ofEndShape(false);
-			
-		ofPopMatrix();
-	ofPopStyle();
+	endStyle();
 }
-
-
 
 // <?> how to overload method to avoid code duplication in this particular case when dealing with pointer - casting would not work
 void wavePlotter::draw (short * data)
 {
-	ofPushStyle();
-		ofPushMatrix();
-		ofTranslate(x, y, 0); // position
-			
-		ofSetColor(225);
-		//ofDrawBitmapString(label, 0, -2);
-		
-		// background
-	
-		ofSetColor(34, 34, 34);
-		ofFill();
-		ofRect(0, 0, width, height);
-
-		// frame
-		ofSetColor(255);
-		ofSetLineWidth(2);
-		ofNoFill();
-		ofRect(0, 0, width, height);
-		
-		// content
-		ofSetColor(color);
-		ofSetLineWidth(line_weight);
-					
+	startStyle();		
 			ofBeginShape();
+			for (int i=0; i<width; i++)
+			{
+				int index = (int) ofMap(i, 0, width, data_start_index, data_end_index);
+				float ty =  ofMap(data[index], lowRange, highRange, height, 0, false);
+				ofVertex(i, ty);
+			}
+			/*
 			for (int i = 0; i < DATA_SIZE; i++)
 			{
 				float tx =  ofMap(i, 0, DATA_SIZE, 0, width, true);
@@ -160,9 +151,7 @@ void wavePlotter::draw (short * data)
 				
 				ofVertex(tx, ty);
 			}
+			*/
 			ofEndShape(false);
-			
-		ofPopMatrix();
-	ofPopStyle();
-
+	endStyle();
 }
