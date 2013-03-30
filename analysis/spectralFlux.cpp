@@ -26,6 +26,40 @@ spectralFlux::spectralFlux(int HOP_SIZE_)
 	cout << " resolution_frames: " << resolution_frames << endl;
 }
 
+
+void spectralFlux::computeFFTData(short* samples, int length)
+{
+	// 
+	int observations = 10;
+	observations = (int)(length/HOP_SIZE)+1;
+	cout << "The FFT array has " << observations << " frames." << endl;
+	fft_data = MatrixXf(BINS_SIZE, observations);
+	//VectorXf fft(BINS_SIZE, 1); 
+	Map<MatrixXf> fft_(fft.magsToDB(), BINS_SIZE, 1);
+	int count = 0;
+	
+	for (long i=0; i<length; i++)
+    {
+	  fft.process(samples[i]/32767.0); // <OPTIM> process method to be passed in larger chunks of data
+	  if (i % HOP_SIZE == 0) // <OPTIM> maybe different if stamement
+	  {
+	     fft.magsToDB();
+	     fft_data.col(count) = fft_;
+	     count++;
+ 	  }  
+    }
+	
+	//return &fft_data;
+}
+
+void spectralFlux::computeFFTData(ofxMaxiSample* sample)
+{
+	computeFFTData(sample->temp,sample->length); 
+}
+
+MatrixXf* spectralFlux::getFFTData() { return &fft_data; }
+
+
 void spectralFlux::setPrecision(float p) { precision = p; }
 
 float spectralFlux::getFlux(float* fft)

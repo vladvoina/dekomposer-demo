@@ -33,6 +33,9 @@ class testApp : public ofBaseApp{
 		void gotMessage(ofMessage msg);
 
 		void audioOut(float * input, int bufferSize, int nChannels);
+		/// extra functions //
+		void drawFBO1(int offset);
+		void drawFBO2(int offset);
 
 		Matrix<float, 1, Dynamic> returnMatrix(int length);
 		///////////////////////////////////////////////////////////
@@ -53,7 +56,7 @@ class testApp : public ofBaseApp{
 		///////////////////////////////////////////////////////////
 		//                     PLOTTING                          //
 		///////////////////////////////////////////////////////////
-		ofFbo fbo;
+		ofFbo fbo, fbo2;
 		wavePlotter plotter;
 		wavePlotter plotter2;
 		wavePlotter plotter3;
@@ -61,7 +64,13 @@ class testApp : public ofBaseApp{
 		float needle_x, needle_y;
 
 		Graph graph, graph2;
-		
+		/////////////////////
+		int NR_OF_PLOTTERS;
+        int ROWS;
+        wavePlotter* plotters;//[NR_OF_PLOTTERS*ROWS];
+		int NR_OF_PLOTTERS2, ROWS2;
+		wavePlotter* plotters2;
+	
 		// -------- GUI ------- //
 		ofxUICanvas *gui;   	
 	    void guiEvent(ofxUIEventArgs &e);
@@ -71,6 +80,9 @@ class testApp : public ofBaseApp{
 		//                       OTHER                            //
 		/////////////////////////////////////////////////////////////
 		PCA pca;
+		MatrixXf data_chunk;
+		VectorXf ffts;
+		VectorXf ffts2;
 		
 
 };

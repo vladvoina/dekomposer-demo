@@ -5,6 +5,7 @@ PCA::PCA()
 {
   mean = 0;
   standard_deviation = 0;
+  covariance_progres = 0;
 }
 
 void PCA::process(MatrixXf* input)
@@ -19,8 +20,12 @@ float PCA::getMean()	             { return mean; }
 float PCA::getStandardDeviation() { return standard_deviation; }
 
 // it is assumeed that the passed in vectors have the same length
+// can be performed as a vector by vector multiplication
 float PCA::getCovariance(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y)
 {
+	covariance_progres++;
+	cout << " " << covariance_progres;
+
 	float x_mean = X->mean();
 	float y_mean = Y->mean();
 	float covariance = 0;
@@ -129,8 +134,8 @@ void PCA::computeFeatureVector(int components)
 		 feature_vector.col(i) = es.eigenvectors().col(covariance_matrix.rows()-1 - i);
 	   }
 	}
-	cout << "Eigenvalues are: " << endl << eigen_values << endl;
-	cout << "Eigenvectors are: " << endl << feature_vector << endl;
+	//cout << "Eigenvalues are: " << endl << eigen_values << endl;
+	//cout << "Eigenvectors are: " << endl << feature_vector << endl;
 }
 
 
@@ -154,7 +159,7 @@ MatrixXf* PCA::getTransformedData() { return &transformed_data; }
 void PCA::reexpressData()
 {
 	reexpressed_data = feature_vector * transformed_data;
-	// <!> add original mean
+	// add original mean
 	for(int i=0; i<reexpressed_data.rows(); i++)
 	{
 	reexpressed_data.row(i).array() += data_mean(i);

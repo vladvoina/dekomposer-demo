@@ -37,6 +37,12 @@ void wavePlotter::setDisplayWindow(float low, float high)
 	data_end_index   = ofMap(high, 0, 100.0, 0, DATA_SIZE, true); 
 }
 
+void wavePlotter::autoScaleRange(VectorXf &data)
+{
+	lowRange = data.minCoeff();//Utils::ofMin(&data(0), DATA_SIZE);
+	highRange = data.maxCoeff();//Utils::ofMax(&data(0), DATA_SIZE);
+}
+
 void wavePlotter::autoScaleRange(short * data)
 {
 	lowRange = Utils::ofMin(data, DATA_SIZE);
@@ -89,11 +95,14 @@ void wavePlotter::endStyle()
 
 void wavePlotter::draw(double * data)
 {
+	int temp_index = -1;
 	startStyle();
 			ofBeginShape();
 			for (int i=0; i<width; i++)
 			{
 				int index = (int) ofMap(i, 0, width, data_start_index, data_end_index);
+				if (temp_index == index) {continue;}
+				temp_index = index;
 				float ty =  ofMap(data[index], lowRange, highRange, height, 0, false);
 				ofVertex(i, ty);
 			}
@@ -111,11 +120,14 @@ void wavePlotter::draw(double * data)
 
 void wavePlotter::draw(float * data)
 {
+	int temp_index = -1;
 	startStyle();
 			ofBeginShape();
 			for (int i=0; i<width; i++)
 			{
 				int index = (int) ofMap(i, 0, width, data_start_index, data_end_index);
+				if (temp_index == index) {continue;}
+				temp_index = index;
 				float ty =  ofMap(data[index], lowRange, highRange, height, 0, false);
 				ofVertex(i, ty);
 			}
@@ -135,12 +147,43 @@ void wavePlotter::draw(float * data)
 // <?> how to overload method to avoid code duplication in this particular case when dealing with pointer - casting would not work
 void wavePlotter::draw (short * data)
 {
+	int temp_index;
 	startStyle();		
 			ofBeginShape();
 			for (int i=0; i<width; i++)
 			{
 				int index = (int) ofMap(i, 0, width, data_start_index, data_end_index);
+				if (temp_index == index) {continue;}
+				temp_index = index;
 				float ty =  ofMap(data[index], lowRange, highRange, height, 0, false);
+				ofVertex(i, ty);
+			}
+			/*
+			for (int i = 0; i < DATA_SIZE; i++)
+			{
+				float tx =  ofMap(i, 0, DATA_SIZE, 0, width, true);
+				float ty =  ofMap(data[i], lowRange, highRange, height, 0, false);
+				
+				ofVertex(tx, ty);
+			}
+			*/
+			ofEndShape(false);
+	endStyle();
+}
+
+void wavePlotter::draw (VectorXf &data)
+{
+	int temp_index = -1;
+	startStyle();		
+			ofBeginShape();
+			for (int i=0; i<width; i++)
+			{
+				int index = (int) ofMap(i, 0, width, data_start_index, data_end_index);
+				if (temp_index == index) {continue;}
+				float ty =  ofMap(data(index), lowRange, highRange, height, 0, false);
+				
+				temp_index = index;
+				//cout << "Index is: " << index << ", ty is: " << endl;
 				ofVertex(i, ty);
 			}
 			/*

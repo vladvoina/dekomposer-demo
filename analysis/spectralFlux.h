@@ -5,6 +5,8 @@
 #include <Eigen/Dense>
 #include "PCA.h"
 #include <vector>
+#include <iostream>
+
 
 using namespace std;
 using namespace Eigen;
@@ -49,13 +51,19 @@ private:
 	
 	vector<int> onsets;
 	float* prunned_flux;
+	//FFT frames
+	MatrixXf fft_data;
+
 	
 public:
 	spectralFlux(int HOP_SIZE);
 	// <!> NORMALIZE SAMPLE SET
 
 	//<!> Create methods returning EigenVectors/Matrices
-
+	void computeFFTData(short* samples, int length);
+	void computeFFTData(ofxMaxiSample* sample);
+	MatrixXf* getFFTData();
+	
 	//<!> MUST BE CALLED FOR EACH NEW SPECTRAL FRAME dictated by the HOP size of the FFT
 	float  getFlux    (float* fft);
 	float* getFluxSig (float* fft);

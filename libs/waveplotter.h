@@ -4,6 +4,9 @@
 #include "ofMain.h"
 #include "utils.cpp"
 #include "ofxUI.h"
+#include <Eigen/Dense>
+
+using namespace Eigen;
 
 class wavePlotter {
 private:
@@ -30,6 +33,7 @@ public:
     void setRange(float low, float high);
 	void setDisplayWindow(float start, float end); // in percentages
 
+	void autoScaleRange(VectorXf &data);
 	void autoScaleRange(short * data);
 	void autoScaleRange(float * data);
 	void autoScaleRange(double * data);
@@ -37,6 +41,7 @@ public:
 	void draw(double * data);
 	void draw(float * data);
 	void draw(short * data);
+	void draw(VectorXf &data);
 
 
 };

@@ -23,6 +23,9 @@ private:
 	RowVectorXf data_mean;
 	float mean;
 	float standard_deviation;
+	
+	// testing
+	long covariance_progres;
 
 public:
 	PCA();
