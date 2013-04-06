@@ -35,6 +35,11 @@ public:
 	void process(MatrixXf* data);
 	float getMean();
 	float getStandardDeviation();
+	// STATIC METHODS
+	static float getStdDev(MatrixXf* input)
+	{
+	  return (input->array() - input->mean()).matrix().squaredNorm()/input->size();
+	}
 	//
 	float getCovariance(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y);
 	float getCorrelation(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y);

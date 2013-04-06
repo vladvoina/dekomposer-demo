@@ -33,17 +33,19 @@ private:
 	float diff; // difference between successive bins
 
 	int flux_history_length; // dependent on the length of the samples
-	MatrixXf flux_history_matrix; // float*  flux_history; 
+	RowVectorXf flux_history_matrix; // float*  flux_history; 
 	//float** flux_sig_history;
 	
 	// THRESHOLDING
 	// no need for an instance of PCA, create static methods for computing mean and std deviation
-	PCA pca;
 	int flux_average_length;
+	int flux_std_length;
+
 	float flux_threshold;
 	float* flux_threshold_history; // maybe turn into eigen matrix
 	float precision;
 	float multiplier;
+	MatrixXf buffer;
 
 	// PEAK-PICKING
 	float time_resolution; // the temporal detail of the onset peak picking algortithm - in milliseconds
@@ -71,8 +73,10 @@ public:
 	// <OPTIM> these functions might take longer to compute - TODO perform benchmarks when assigning variables to Eigenvectors
 	void computeFlux (short* samples, int length);
 	void computeFlux (ofxMaxiSample* sample);	
+	void computeFluxOff();
+
 	float*    getFluxHistory();
-	MatrixXf* getFluxHistoryM();
+	RowVectorXf* getFluxHistoryM();
 	float getThreshold(int flux_frame);	
 	void computeFluxThreshold();
 	float* getFluxThresholdHistory();

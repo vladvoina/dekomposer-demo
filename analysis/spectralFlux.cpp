@@ -8,6 +8,7 @@ spectralFlux::spectralFlux(int HOP_SIZE_)
 	BINS_SIZE = 4096/8; // half the fft size?
 
 	flux_average_length = 15; // keep in mind temporal constraints
+	flux_std_length = 30;
 	//init FFT
 	fft.setup(WINDOW_SIZE, WINDOW_SIZE, HOP_SIZE);
 
@@ -50,8 +51,7 @@ void spectralFlux::computeFFTData(short* samples, int length, bool scale)
 		 if (scale) fft_data.col(count) = fft_data.col(count).array() / (float) fft_data.col(count).maxCoeff();
 	     count++;
  	  }  
-    }
-	
+    }	
 	//return &fft_data;
 }
 
@@ -113,6 +113,18 @@ void spectralFlux::computeFlux(short* samples, int length)
   }
 }
 
+void spectralFlux::computeFluxOff()
+{
+  flux_history_length = fft_data.cols();//(int)(length/HOP_SIZE) + 1; //<!> some matching problems might arise here
+  flux_history_matrix = RowVectorXf(flux_history_length);
+  flux_history_matrix(0) = 0;
+  
+  for (int i=1; i<flux_history_length; i++)
+  {
+	 flux_history_matrix(i) = (fft_data.col(i) - fft_data.col(i-1)).array().abs().sum()/BINS_SIZE;
+  }
+}
+
 void spectralFlux::computeFlux(ofxMaxiSample* sample)
 {
 	computeFlux(sample->temp,sample->length); 
@@ -123,7 +135,7 @@ float* spectralFlux::getFluxHistory()
 	return &flux_history_matrix(0);
 }
 
-MatrixXf* spectralFlux::getFluxHistoryM()
+RowVectorXf* spectralFlux::getFluxHistoryM()
 {
  return &flux_history_matrix;
 }
@@ -131,14 +143,16 @@ MatrixXf* spectralFlux::getFluxHistoryM()
 float spectralFlux::getThreshold(int frame)
 {
 	// to avoid stepping out of the array at the beggining of analysis
-	if (frame-flux_average_length >= 0)
+	if (frame-flux_std_length >= 0)
 	{
 	//<OPTIM> avoid this array creation
 	//<OPTIM> set maxMatrix size - look into Eigen reference
-	MatrixXf buffer = flux_history_matrix.block(0, frame-flux_average_length, 1, flux_average_length); 
-	pca.process(&buffer);
+	buffer = flux_history_matrix.block(0, frame-flux_std_length, 1, flux_std_length); 
+	//pca.process(&buffer);
 	//<!> standard deviation only makes sense when calculated across larger buffers
-	flux_threshold = pca.getMean() * multiplier + pca.getStandardDeviation() * precision;
+	//flux_threshold = buffer.mean() * multiplier + pca.getStandardDeviation() * precision;
+	flux_threshold = flux_history_matrix.block(0, frame-flux_average_length, 1, flux_average_length).mean() * multiplier +
+		             PCA::getStdDev(&buffer) * precision;
 	} else // <!> can be improved so that the buffer increases gradually
 	  { flux_threshold = 0; }
 
