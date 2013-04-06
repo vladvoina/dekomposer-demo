@@ -49,7 +49,7 @@ class testApp : public ofBaseApp{
 		double sample;
 		
 		ofxMaxiOsc osc;
-		ofxMaxiSample sampl;
+		ofxMaxiSample sampl, sampl2;
 
 		spectralFlux* flux;
 		
@@ -81,6 +81,7 @@ class testApp : public ofBaseApp{
 		/////////////////////////////////////////////////////////////
 		PCA pca;
 		MatrixXf data_chunk;
+		MatrixXf test_data;
 		VectorXf ffts;
 		VectorXf ffts2;
 		

@@ -60,8 +60,8 @@ public:
 	// <!> NORMALIZE SAMPLE SET
 
 	//<!> Create methods returning EigenVectors/Matrices
-	void computeFFTData(short* samples, int length);
-	void computeFFTData(ofxMaxiSample* sample);
+	void computeFFTData(short* samples, int length, bool scale=false);
+	void computeFFTData(ofxMaxiSample* sample, bool scale=false);
 	MatrixXf* getFFTData();
 	
 	//<!> MUST BE CALLED FOR EACH NEW SPECTRAL FRAME dictated by the HOP size of the FFT
@@ -89,4 +89,5 @@ public:
 
 	//
 	void updateTail();
+	int getBinsSize();
 };

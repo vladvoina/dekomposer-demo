@@ -1,6 +1,5 @@
 #include "testApp.h"
 
-float testvalues[] = {1,2,1,2,1,2};
 
 //--------------------------------------------------------------
 void testApp::setup(){
@@ -8,13 +7,14 @@ void testApp::setup(){
   //                    AUDIO                                   //
   //////////////////////////////////////////////////////////////// 
   maxiSettings::setup(44100, 2, 512);
-  sampl.load(ofToDataPath("track10.wav"));
-
+  sampl.load(ofToDataPath("test_loop.wav"));
+  sampl2.load(ofToDataPath("Soundset/Kicks2_test.wav"));
+  
   // ************************************************************
   /* make sure you call this last*/
   soundStream.setup(this, 2, 0, maxiSettings::sampleRate, maxiSettings::bufferSize, 4);
   
-  const int HOP_SIZE = 512; // half the window size
+  const int HOP_SIZE = 2048/8; // half the window size
   //fft.setup(HOP_SIZE*2, HOP_SIZE*2, HOP_SIZE);
   flux = new spectralFlux(HOP_SIZE);
   
@@ -23,56 +23,100 @@ void testApp::setup(){
   flux->computePrunnedFlux();
   flux->findFluxOnsets();
 
-  flux->computeFFTData(&sampl);
+  flux->computeFFTData(&sampl, false);
 
-  int max_frames = 300;
-  data_chunk = flux->getFFTData()->block<100, 300>(0,0);
+  int max_frames = 14; max_frames = 3;
+  
+  const int fft_crop = 256;
+  //data_chunk = flux->getFFTData()->block<100, 300>(0,0);
+  data_chunk = MatrixXf(fft_crop, max_frames);
+  int testvalues[] = {3, 13, 24, 35, 47, 57, 67, 78, 88, 100, 112, 122, 133, 143};
+  for (int i=0; i<max_frames; i++)
+  {
+	data_chunk.col(i) = flux->getFFTData()->block<fft_crop, 1>(0, testvalues[i]);
+  }
 
-  //cout << "FRAME 1 is: " << (*flux->getFFTData(&sampl)).col(0) << endl;
+  //data_chunk = flux->getFFTData()->topRows(fft_crop);
+  data_chunk = flux->getFFTData()->topLeftCorner(fft_crop, 200);
+  data_chunk.transposeInPlace();
 
-  //cout << "FRAME 2 is: " << (*flux->getFFTData(&sampl)).col(1) << endl;
-
-  data = MatrixXf(2, 14);
-  data << 2.5, 0.5, 2.2, 1.9, 3.1, 2.3, 2.0, 1.0, 1.5, 1.1, 8, -1, 3.2, -1.2,
-	     // 0.1, -1.5, 2.0, 2.3, 3.9, 2.5, 1.4, 0.5, 0.7, 0.3,   
-	      2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1;
-		 // 5.0, 4.3, 0.0, 1.2, -5.3, 2.4, 5.2, -3.2, 1.2, -0.4;
-  //data <<
-   
-  cout << "computing covariance matrix..." << endl;
-  pca.computeCovarianceMatrix(&data_chunk);
-  //cout << "Covariance Matrix: " << endl << *pca.getCovarianceCorrelationMatrix() << endl;
-  cout << "computing feature vector..." << endl;
+  cout << "covariance..." << endl;
+  pca.computeCovarianceMatrix2(&data_chunk);
+  cout << "feature vector..." << endl;
   pca.computeFeatureVector(5);
-  cout << "transforming data..." << endl;
-  pca.transformData(&data_chunk);
-  cout << "reexpressing data..." << endl;
+  cout << "transforming..." << endl;
+  pca.transformData2();
+  cout << "reexpressing..." << endl;
   pca.reexpressData();
+
+  
+  data_chunk = *pca.getReexpressedData();
+  data_chunk.transposeInPlace();
+
+  data = MatrixXf(2, 10);
+  //flux->computeFFTData(&sampl);
+ 
+  /*
+  data << 2.5, 0.5, 2.2, 1.9, 3.1, 2.3, 2.0, 1.0, 1.5, 1.1, 8, -1, 3.2, -1.2,
+	      0.1, -1.5, 2.0, 2.3, 3.9, 2.5, 1.4, 0.5, 0.7, 0.3, 11, 3, 4, 5, 
+	      2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  2.4, 0.7, 2.9, 2.2, 3.0, 2.7, 1.6, 1.1, 1.6, 0.9, 2, -2, 4.5, -2.1,
+		  5.0, 4.3, 0.0, 1.2, -5.3, 2.4, 5.2, -3.2, 1.2, -0.4, 4, -3, -3, 3;
+  //data <<
+  */
+
+  data << 1, 2.5, 3.5, 5, 6, 7.5, 8.5, 9, 10, 11,
+	      3, 4  , 2  , 5, 6, 3  , 7  , 3, 8 , 9 ;
+
+   
+
+  /*cout << "computing covariance matrix2T..." << endl;
+  pca.computeCovarianceMatrix2T(&data_chunk);
+  cout << "computing feature vectorT..." << endl;
+  pca.computeFeatureVectorT(-7);
+  cout << "transforming data..." << endl;
+  pca.transformData2T();
+  cout << "projecting data..." << endl;*/
+
+ /* flux->computeFFTData(&sampl2, false);
+
+  for (int i=0; i<max_frames; i++)
+  {
+  cout << "TESTING SAMPLE " << i+1 << " >>>>>>>>" << endl;
+  test_data = flux->getFFTData()->block<fft_crop, 1>(0, testvalues[i]);
+  pca.projectData(&test_data);
+  pca.computeDistances();
+  pca.distanceToSpace(&test_data);
+  cout << endl;
+  }*/
+
+  
+
+  //pca.transformData2T();
+ // cout << "reexpressing data..." << endl;
+  //pca.reexpressData();
   //cout << "Transformed data: " << endl << *pca.getTransformedData() << endl;
   
   //pca.reexpressData();
   //cout << "Reexpressed data: " << *pca.getReexpressedData() << endl;
-  
-  /*
-  vector<int> vec = *flux->getOnsets();
-  for (int i=0; i<vec.size(); i++)
-  {
-	  cout << " " << vec[i];
-  }
-  cout << " SIZE: " << vec.size() << endl;
-  */
-  /*
-  float* p = flux->getPrunnedFlux();
-
-  for(int i=0; i<(int)(sampl.length/HOP_SIZE); i++)
-  {
-	cout << p[i] << " ";
-  }
-  */
-  //cout << *flux->getFluxHistoryM() << endl; 
 
   ffts = flux->getFFTData()->col(7);
-  ffts2 = pca.getReexpressedData()->col(0);
+  ffts2 = data_chunk.col(0);//pca.getReexpressedData()->col(0);
   //ffts2 = pca.getTransformedData()->col(0);
 
   ////////////////////////////////////////////////////////////////
@@ -89,22 +133,21 @@ void testApp::setup(){
   plotter3.setRange(plotter.lowRange, plotter.highRange);
 
   graph.setProperties(10, 10, 450, 450, ofColor(255, 0, 0), "reexpressed data", 10);
-  graph.setRange(-3, 10);
-
+  graph.setRange(-10, 11);
   graph2.setProperties(470, 10, 450, 450, ofColor(0, 100, 200), "transformed data", 10);
-  graph2.setRange(-3, 10);
+  graph2.setRange(-10, 11);
 
   // --------------- GUI -----------------//
-  NR_OF_PLOTTERS = 2;
-  ROWS = 2;
-  NR_OF_PLOTTERS2 = 2;
-  ROWS2 = 2;
+  NR_OF_PLOTTERS = 1;
+  ROWS = 1;
+  NR_OF_PLOTTERS2 = 1;
+  ROWS2 = 1;
 
   ofSetVerticalSync(true); 
   ofEnableSmoothing(); 
   gui = new ofxUICanvas(10,ofGetHeight()-40,1100,100);
-  gui->addSlider("slider",0.0, flux->getFFTData()->cols()-NR_OF_PLOTTERS*ROWS,0.0,300,20);
-  gui->addWidgetRight(new ofxUISlider("slider2", 0.0, max_frames-NR_OF_PLOTTERS2*ROWS2, 0.0, 300, 20));
+  gui->addSlider("slider",0.0, flux->getFFTData()->cols()-NR_OF_PLOTTERS*ROWS,0.0,600,20);
+  gui->addWidgetRight(new ofxUISlider("slider2", 0.0, data_chunk.cols()-NR_OF_PLOTTERS2*ROWS2, 0.0, 300, 20));
   //gui->addWidgetDown(new ofxUIRangeSlider(990,7, 0.0, 100.0, 0.0, 100.0, "RSLIDER"));
   ofAddListener(gui->newGUIEvent, this, &testApp::guiEvent);
   gui->setVisible(true);
@@ -124,8 +167,8 @@ void testApp::setup(){
     {
 	  int x = ofMap(i,0, NR_OF_PLOTTERS, offset, ofGetWidth()-offset);
 	  plotters[NR_OF_PLOTTERS*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "flux", flux->getFFTData()->rows());
-	  plotters[NR_OF_PLOTTERS*j+i].setRange(0, 35);
-	  plotters[NR_OF_PLOTTERS*j+i].setDisplayWindow(0, 20);
+	  plotters[NR_OF_PLOTTERS*j+i].setRange(0, 60);
+	  plotters[NR_OF_PLOTTERS*j+i].setDisplayWindow(0, 50);
     }
   }
   //////////////////////////////////////////////////////////
@@ -136,8 +179,8 @@ void testApp::setup(){
     for (int i=0; i<NR_OF_PLOTTERS2; i++)
     {
 	  int x = ofMap(i,0, NR_OF_PLOTTERS2, offset, ofGetWidth()-offset);
-	  plotters2[NR_OF_PLOTTERS2*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "flux", pca.getTransformedData()->rows());
-	  plotters2[NR_OF_PLOTTERS2*j+i].setRange(0, 35);
+	  plotters2[NR_OF_PLOTTERS2*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "flux", data_chunk.rows());
+	  plotters2[NR_OF_PLOTTERS2*j+i].setRange(0, 60);
 	  plotters2[NR_OF_PLOTTERS2*j+i].setDisplayWindow(0, 100);
     }
   }
@@ -154,11 +197,6 @@ void testApp::setup(){
   onsets = false;
   //cout << "------" << ffts.transpose() << endl;
 
-}
-
-Matrix<float, 1, Dynamic> testApp::returnMatrix(int l)
-{
- return Map<Matrix<float, 1, Dynamic> >(testvalues, l);
 }
 
 //--------------------------------------------------------------
@@ -310,7 +348,7 @@ void testApp::drawFBO2(int offset)
     {
       for (int i=0; i<NR_OF_PLOTTERS2; i++)
       {
-	   ffts2 = pca.getReexpressedData()->col(offset+NR_OF_PLOTTERS2*j+i);//flux->getFFTData()->col((int)slider->getScaledValue()+NR_OF_PLOTTERS*j+i);
+	   ffts2 = data_chunk.col(offset+NR_OF_PLOTTERS2*j+i);  //pca.getReexpressedData()->col(offset+NR_OF_PLOTTERS2*j+i);//flux->getFFTData()->col((int)slider->getScaledValue()+NR_OF_PLOTTERS*j+i);
 	   //pca.getTransformedData()->col((int)slider->getScaledValue()+NR_OF_PLOTTERS2*j+i);
 	   plotters2[NR_OF_PLOTTERS2*j+i].draw(ffts2);
       }

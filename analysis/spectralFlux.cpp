@@ -4,8 +4,8 @@
 spectralFlux::spectralFlux(int HOP_SIZE_)
 {
 	HOP_SIZE = HOP_SIZE_;
-	WINDOW_SIZE = 1024; // for maximilian same as fft size
-	BINS_SIZE = 512; // half the fft size?
+	WINDOW_SIZE = 8192/8; // for maximilian same as fft size
+	BINS_SIZE = 4096/8; // half the fft size?
 
 	flux_average_length = 15; // keep in mind temporal constraints
 	//init FFT
@@ -26,11 +26,12 @@ spectralFlux::spectralFlux(int HOP_SIZE_)
 	cout << " resolution_frames: " << resolution_frames << endl;
 }
 
+int spectralFlux::getBinsSize() { return BINS_SIZE; }
 
-void spectralFlux::computeFFTData(short* samples, int length)
+void spectralFlux::computeFFTData(short* samples, int length, bool scale)
 {
 	// 
-	int observations = 10;
+	int observations = 0;
 	observations = (int)(length/HOP_SIZE)+1;
 	cout << "The FFT array has " << observations << " frames." << endl;
 	fft_data = MatrixXf(BINS_SIZE, observations);
@@ -45,6 +46,8 @@ void spectralFlux::computeFFTData(short* samples, int length)
 	  {
 	     fft.magsToDB();
 	     fft_data.col(count) = fft_;
+		 // adjust range to vary from 0 to 1
+		 if (scale) fft_data.col(count) = fft_data.col(count).array() / (float) fft_data.col(count).maxCoeff();
 	     count++;
  	  }  
     }
@@ -52,9 +55,9 @@ void spectralFlux::computeFFTData(short* samples, int length)
 	//return &fft_data;
 }
 
-void spectralFlux::computeFFTData(ofxMaxiSample* sample)
+void spectralFlux::computeFFTData(ofxMaxiSample* sample, bool scale)
 {
-	computeFFTData(sample->temp,sample->length); 
+	computeFFTData(sample->temp,sample->length, scale); 
 }
 
 MatrixXf* spectralFlux::getFFTData() { return &fft_data; }
