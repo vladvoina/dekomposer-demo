@@ -87,7 +87,7 @@ void wavePlotter::endStyle()
 {
 	     // text
 		 ofSetColor(225);
-		 ofDrawBitmapString(label, 0, -2);
+		 ofDrawBitmapString(label, 2, 10);
 
 		ofPopMatrix();
 	ofPopStyle();

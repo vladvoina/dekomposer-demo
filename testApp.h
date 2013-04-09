@@ -85,5 +85,6 @@ class testApp : public ofBaseApp{
 		VectorXf ffts;
 		VectorXf ffts2;
 		
+		bool thresh_type;
 
 };

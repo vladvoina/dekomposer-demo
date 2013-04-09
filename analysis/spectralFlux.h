@@ -55,10 +55,11 @@ private:
 	float* prunned_flux;
 	//FFT frames
 	MatrixXf fft_data;
+	MatrixXf onsets_fft;
 
 	
 public:
-	spectralFlux(int HOP_SIZE);
+	spectralFlux(int HOP_SIZE, int WINDOW);
 	// <!> NORMALIZE SAMPLE SET
 
 	//<!> Create methods returning EigenVectors/Matrices
@@ -77,11 +78,16 @@ public:
 
 	float*    getFluxHistory();
 	RowVectorXf* getFluxHistoryM();
-	float getThreshold(int flux_frame);	
-	void computeFluxThreshold();
+	float getThreshold(int flux_frame);
+	float getThreshold2(int frame);
+	void computeFluxThreshold(bool type=false);
 	float* getFluxThresholdHistory();
 	// set precision standard deviation
 	void setPrecision(float p);
+	void setStdAvgLength(int l);
+	void setMeanMult(float m);
+	void setMeanAvgLength(int l);
+
 	void findFluxOnsets();
 	vector<int>* getOnsets();
 	void computePrunnedFlux();
@@ -90,6 +96,9 @@ public:
 	void computeFluxSig(short* samples, int length);
 	void computeFluxSig(ofxMaxiSample* sample);
 	float** getFluxSigHistory();
+
+	void computeOnsetsFFT();
+	MatrixXf* getOnsetsFFT();
 
 	//
 	void updateTail();
