@@ -1,11 +1,25 @@
 #pragma once
 
 #include "ofMain.h"
+#include <Eigen/Dense>
 #include <iostream>
+
+using namespace Eigen;
 
 class Utils {
 
 public:
+
+	/*
+	static void eigenToArray(Matrix <double, Dynamic, Dynamic, RowMajor>* data, double** &data_pointer)
+	{
+	  **data_pointer = (double**) malloc(data->rows()*sizeof(double*));
+	  for (int i=0; i<data->rows(); i++)
+	  {
+	   data_pointer[i] = &((*data)(i, 0));
+	  }
+	}
+	*/
 
 	static double ofMax(double * ar, int ar_length)
 	{

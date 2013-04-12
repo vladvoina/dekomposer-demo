@@ -1,14 +1,14 @@
 #include "testApp.h"
 
- int plotter_height = 340;
- int plotter_y_pos = 220;//430;
+ int plotter_height = 130;
+ int plotter_y_pos = 430;
 //--------------------------------------------------------------
 void testApp::setup(){
   ////////////////////////////////////////////////////////////////
   //                    AUDIO                                   //
   //////////////////////////////////////////////////////////////// 
   maxiSettings::setup(44100, 2, 512);
-  sampl.load(ofToDataPath("track20.wav"));
+  sampl.load(ofToDataPath("track003.wav"));
   sampl2.load(ofToDataPath("Soundset/Kicks2_test.wav"));
   // ************************************************************
   /* make sure you call this last*/
@@ -26,14 +26,29 @@ void testApp::setup(){
   flux->computeOnsetsFFT();
 
   int max_frames = 3;
-  const int fft_crop = 512;
+  const int fft_crop = 256;
   //data_chunk = MatrixXf(fft_crop, max_frames);
-  data_chunk = *flux->getOnsetsFFT();
+  data_chunk = flux->getOnsetsFFT()->topRows(fft_crop);
+  MatrixXf test_frame = data_chunk.col(4);
+
+  pca.computeCovarianceMatrix2T(&data_chunk);
+  pca.computeFeatureVectorT(4);
+  pca.transformData2T();
+ 
+  data_cluster = *pca.getTransformedData();
+
+  kmeans.cluster(&data_cluster);
+
+  //pca.projectData(&test_frame);
+  //pca.computeDistances();
+
+  pca.reexpressData();
+
+  
 
   data = MatrixXf(1, 5);
   data << 600, 470, 170, 430, 300;
 	   //   3, 4  , 2  , 5, 6, 3  , 7  , 3, 8 , 9 ;
-  cout << "STD dev is: " << PCA::getStdDev(&data) << endl;
  
 /*
   for (int i=0; i<max_frames; i++)
@@ -59,10 +74,10 @@ void testApp::setup(){
   plotter2.setProperties(10, plotter_y_pos, 1000, plotter_height, ofColor(0, 60, 210), "spectral flux", flux->getFluxHistoryM()->size(), false);
   plotter2.setRange(plotter.lowRange, plotter.highRange);
 
-  graph.setProperties(10, 10, 450, 450, ofColor(255, 0, 0), "reexpressed data", 10);
-  graph.setRange(-10, 11);
-  graph2.setProperties(470, 10, 450, 450, ofColor(0, 100, 200), "transformed data", 10);
-  graph2.setRange(-10, 11);
+  graph.setProperties(10, 10, 450, 450, ofColor(255, 0, 0), "reexpressed data", pca.getTransformedData()->cols());
+  graph.setRange(-120, 120);
+  graph2.setProperties(470, 10, 450, 450, ofColor(0, 100, 200), "transformed data", 15);
+  graph2.setRange(-5, 20);
  
   NR_OF_PLOTTERS = 1;
   ROWS = 1;
@@ -73,7 +88,8 @@ void testApp::setup(){
   ofSetVerticalSync(true); 
   ofEnableSmoothing(); 
   gui = new ofxUICanvas(10,ofGetHeight()-80,1100,100);
-  gui->addSlider("slider",0.0, flux->getFFTData()->cols()-NR_OF_PLOTTERS*ROWS,0.0,600,20);
+  //gui->addSlider("slider",0.0, flux->getFFTData()->cols()-NR_OF_PLOTTERS*ROWS,0.0,600,20);
+  gui->addSlider("slider",0.0, pca.getReexpressedData()->cols()-NR_OF_PLOTTERS*ROWS,0.0,600,20);
   gui->addWidgetRight(new ofxUISlider("slider2", 0.0, data_chunk.cols()-NR_OF_PLOTTERS2*ROWS2, 0.0, 300, 20));
   gui->addWidgetDown(new ofxUISlider("std precision", 0.0, 3.0, 0.0, 220, 20));
   gui->addWidgetRight(new ofxUISlider("std avg length", 3, 100, 30, 220, 20));
@@ -97,7 +113,8 @@ void testApp::setup(){
     for (int i=0; i<NR_OF_PLOTTERS; i++)
     {
 	  int x = ofMap(i,0, NR_OF_PLOTTERS, offset, ofGetWidth()-offset);
-	  plotters[NR_OF_PLOTTERS*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "fft", flux->getFFTData()->rows());
+	  //plotters[NR_OF_PLOTTERS*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "fft", flux->getFFTData()->rows());
+	  plotters[NR_OF_PLOTTERS*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "fft", pca.getReexpressedData()->rows());
 	  plotters[NR_OF_PLOTTERS*j+i].setRange(0, 60);
 	  plotters[NR_OF_PLOTTERS*j+i].setDisplayWindow(0, 100);
     }
@@ -126,6 +143,8 @@ void testApp::setup(){
   needle_y = 310;
   onsets = false;
   thresh_type = false;
+
+  //init_data();
   
 }
 
@@ -138,12 +157,12 @@ void testApp::draw(){
 	//ofEnableBlendMode(OF_BLENDMODE_ALPHA);   
 	ofClear(0,0,0,0);
 	fbo.draw(0, 0);
-	//fbo2.draw(0, 215);
+	fbo2.draw(0, 215);
 	plotter.draw(flux->getFluxHistory());
 	plotter2.draw(flux->getFluxThresholdHistory());
 	//plotter.draw(ffts);
-	//graph.draw(&data);
-	//graph2.draw(pca.getReexpressedData());
+	graph.draw(pca.getTransformedData());
+	//graph2.draw(&data_cluster);
 
 	needle_x = ofMap(sampl.position, 0, sampl.length, 10, 1010);
 	ofSetColor(20, 255, 0);
@@ -177,37 +196,21 @@ void testApp::guiEvent(ofxUIEventArgs &e)
 	} else
     if (e.widget->getName() == "std precision")
 	{
-		ofxUISlider *slider = (ofxUISlider *) e.widget;
-		flux->setPrecision(slider->getScaledValue());
-		flux->computeFluxThreshold();
-		flux->computePrunnedFlux();
-        flux->findFluxOnsets();
+		
 	} else
 	if (e.widget->getName() == "std avg length")
 	{
-       ofxUISlider *slider = (ofxUISlider *) e.widget;
-	   flux->setStdAvgLength((int)slider->getScaledValue());
-	   flux->computeFluxThreshold();
-	   flux->computePrunnedFlux();
-       flux->findFluxOnsets();
+       
 
 	} else
 	if (e.widget->getName() == "mean mult")
 	{
-       ofxUISlider *slider = (ofxUISlider *) e.widget;
-	   flux->setMeanMult(slider->getScaledValue());
-	   flux->computeFluxThreshold();
-	   flux->computePrunnedFlux();
-       flux->findFluxOnsets();
+     
 
 	} else
 	if (e.widget->getName() == "mean avg length")
 	{
-       ofxUISlider *slider = (ofxUISlider *) e.widget;
-	   flux->setMeanAvgLength((int)slider->getScaledValue());
-	   flux->computeFluxThreshold();
-	   flux->computePrunnedFlux();
-       flux->findFluxOnsets();
+      
 	}
 }
 
@@ -232,19 +235,6 @@ void testApp::keyPressed(int key){
 	if (key == 'o')
 	{
 		onsets = !onsets;
-	}
-
-	if (key == 't')
-	{
-		thresh_type = !thresh_type;
-		cout << "THRESH TYPE is " << thresh_type << endl;
-	}
-
-	if (key == 'c')
-	{
-	   flux->computeFluxThreshold(thresh_type);
-	   flux->computePrunnedFlux();
-       flux->findFluxOnsets();
 	}
 	
 }
@@ -303,7 +293,8 @@ void testApp::drawFBO1(int offset)
    {
      for (int i=0; i<NR_OF_PLOTTERS; i++)
      {
-	  ffts = flux->getFFTData()->col(offset+NR_OF_PLOTTERS*j+i);
+	  //ffts = flux->getFFTData()->col(offset+NR_OF_PLOTTERS*j+i);
+	  ffts = pca.getReexpressedData()->col(offset+NR_OF_PLOTTERS*j+i);
 	  plotters[NR_OF_PLOTTERS*j+i].draw(ffts);
      }
    }
@@ -325,4 +316,18 @@ void testApp::drawFBO2(int offset)
       }
     }
   fbo2.end();
+}
+
+void testApp::init_data()
+{
+  const int nrows = 15;
+  const int ncols = 2;
+  // declare data in header
+  data_cluster.resize(ncols, nrows);
+
+  data_cluster << 2.2, 2.4, 2.1, 1.9, 2.0, 6.3, 5.8, 6.2, 5.9, 6.0, 11.3, 11.0, 11.2, 10.9, 10.8,
+	              1.2, 1.2, 1.0, 1.3, 1.4, 3.4, 3.5, 3.2, 3.1, 3.0, 1.2, 1.3, 1.0, 1.1, 1.0;
+ 
+  kmeans.cluster(&data_cluster);
+  //data_cluster.transposeInPlace();
 }

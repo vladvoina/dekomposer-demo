@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include "ofMain.h"
 #include "ofxMaxim.h"
 #include <iostream>
@@ -10,6 +11,18 @@
 #include "PCA.h"
 #include "ofxUI.h"
 #include "Graph.h"
+#include "kMeans.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+/*
+extern "C" {
+#include <cluster.h>
+}
+*/
+
+//#include <cluster.h>
 
 using namespace Eigen;
 using namespace std;
@@ -36,6 +49,10 @@ class testApp : public ofBaseApp{
 		/// extra functions //
 		void drawFBO1(int offset);
 		void drawFBO2(int offset);
+		// clustering
+		void init_data();
+	    kMeans kmeans;
+		Matrix <float, Dynamic, Dynamic, RowMajor> data_cluster;
 
 		Matrix<float, 1, Dynamic> returnMatrix(int length);
 		///////////////////////////////////////////////////////////
@@ -86,5 +103,7 @@ class testApp : public ofBaseApp{
 		VectorXf ffts2;
 		
 		bool thresh_type;
+
+		
 
 };

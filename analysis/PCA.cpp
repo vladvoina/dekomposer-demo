@@ -253,6 +253,16 @@ void PCA::reexpressData()
 	}	
 }
 
+void PCA::reexpressDataT()
+{
+	reexpressed_data = feature_vector_t * transformed_data;
+	// add original mean
+	for(int i=0; i<reexpressed_data.rows(); i++)
+	{
+	reexpressed_data.row(i).array() += data_mean(i);
+	}	
+}
+
 MatrixXf* PCA::getReexpressedData() { return &reexpressed_data; }
 
 void PCA::projectData(MatrixXf* data)

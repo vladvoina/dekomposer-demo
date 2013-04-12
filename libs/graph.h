@@ -18,5 +18,6 @@ public:
 
 	//Data is assumed to be a 2(row)-dimentional Matrix organized
 	void draw(MatrixXf* data);
+	void draw(Matrix<double, Dynamic, Dynamic, RowMajor>* data);
 
 };

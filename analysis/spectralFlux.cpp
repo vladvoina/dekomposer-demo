@@ -10,16 +10,16 @@ spectralFlux::spectralFlux(int HOP_SIZE_, int WINDOW)
 	fft.setup(WINDOW_SIZE, WINDOW_SIZE, HOP_SIZE);
 	lastFFT = new float[BINS_SIZE]; for (int i=0; i<BINS_SIZE; i++) lastFFT[i] = 0; // initialize fft
 	flux_sig = new float[BINS_SIZE];
+	flux_threshold = 0; // init 
 	diff = 0; // the difference between two succesive fft frames
 	          // it will range between 0 and the maximum amplitude of the fft bins
 	/*************************************************************/
-	flux_average_length = 15; // the number of flux frames over which the mean for the threshold is calculated
+	flux_average_length = 6; // the number of flux frames over which the mean for the threshold is calculated
 	flux_std_length = 30; // the number of flux frames over which the standard deviation for the threshold is calculated
-    flux_threshold = 0; // init
-	precision = 0.0; // the scaling of the standard deviation
-	multiplier = 1.2; // scaling for the mean to avoid detecting small peaks over sections with very low energy
+   	precision = 0.6; // the scaling of the standard deviation
+	multiplier = 1.25; // scaling for the mean to avoid detecting small peaks over sections with very low energy
 	//<!> does not work well with tunes that have very high energy
-	 
+
 	time_resolution = 70; // the minimum time separation between succesive onsets
 	resolution_frames = (int) (time_resolution/(HOP_SIZE*1000/44100.0));
 	cout << " resolution_frames: " << resolution_frames << endl;

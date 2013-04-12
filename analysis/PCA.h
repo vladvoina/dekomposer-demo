@@ -62,10 +62,11 @@ public:
 	// optimized
 	void transformData2();
 	void transformData2T();
-	
 	MatrixXf* getTransformedData();
+
 	void reexpressData();
-	
+	void reexpressDataT();
+
 	MatrixXf* getReexpressedData();
 
 	void projectData(MatrixXf* data);
