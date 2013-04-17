@@ -3,7 +3,6 @@
 
 #include "ofMain.h"
 #include "ofxMaxim.h"
-#include <iostream>
 #include "waveplotter.h"
 #include "spectralFlux.h"
 #include <Eigen\Dense>
@@ -13,6 +12,7 @@
 #include "Graph.h"
 #include "kMeans.h"
 
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 

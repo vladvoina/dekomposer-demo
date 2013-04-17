@@ -79,3 +79,29 @@ void Graph::draw(Matrix<double, Dynamic, Dynamic, RowMajor>* data)
 	endStyle();
 }
 
+void Graph::draw(Matrix<float, Dynamic, Dynamic, RowMajor>* data)
+{
+	startStyle();
+	//content
+	//ofFill();
+	//ofBeginShape();
+	//ofFill();
+			for (int i=0; i<data->cols(); i++)
+			{
+				float tx = ofMap((*data)(0, i), lowRange, highRange, 0, width);
+				float ty = ofMap((*data)(1, i), lowRange, highRange, height, 0);
+				//if(lines) ofVertex(tx, ty);
+				ofCircle(tx, ty, point_weight);
+			}
+	//ofEndShape(false);
+	// zero axis
+	ofSetColor(255);
+	ofSetLineWidth(1);
+	float zero_x = ofMap(0, lowRange, highRange, 0, width);
+	float zero_y = ofMap(0, lowRange, highRange, height, 0);
+	ofLine(0, zero_y, width, zero_y);
+	ofLine(zero_x, height, zero_x, 0);
+
+	endStyle();
+}
+

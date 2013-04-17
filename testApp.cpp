@@ -8,7 +8,7 @@ void testApp::setup(){
   //                    AUDIO                                   //
   //////////////////////////////////////////////////////////////// 
   maxiSettings::setup(44100, 2, 512);
-  sampl.load(ofToDataPath("track003.wav"));
+  sampl.load(ofToDataPath("track40.wav"));
   sampl2.load(ofToDataPath("Soundset/Kicks2_test.wav"));
   // ************************************************************
   /* make sure you call this last*/
@@ -32,12 +32,12 @@ void testApp::setup(){
   MatrixXf test_frame = data_chunk.col(4);
 
   pca.computeCovarianceMatrix2T(&data_chunk);
-  pca.computeFeatureVectorT(4);
+  pca.computeFeatureVectorT(3);
   pca.transformData2T();
  
   data_cluster = *pca.getTransformedData();
 
-  kmeans.cluster(&data_cluster);
+  kmeans.cluster(&data_cluster, 5);
 
   //pca.projectData(&test_frame);
   //pca.computeDistances();
@@ -74,8 +74,8 @@ void testApp::setup(){
   plotter2.setProperties(10, plotter_y_pos, 1000, plotter_height, ofColor(0, 60, 210), "spectral flux", flux->getFluxHistoryM()->size(), false);
   plotter2.setRange(plotter.lowRange, plotter.highRange);
 
-  graph.setProperties(10, 10, 450, 450, ofColor(255, 0, 0), "reexpressed data", pca.getTransformedData()->cols());
-  graph.setRange(-120, 120);
+  graph.setProperties(10, 10, 400, 400, ofColor(255, 0, 0), "transformed data", pca.getTransformedData()->cols());
+  graph.setRange(-100, 100);
   graph2.setProperties(470, 10, 450, 450, ofColor(0, 100, 200), "transformed data", 15);
   graph2.setRange(-5, 20);
  
@@ -176,6 +176,14 @@ void testApp::draw(){
 	  for (int i=0; i<flux->getOnsets()->size(); i++)
 	  {
 		float x = ofMap((*flux->getOnsets())[i], 0, flux->getFluxHistoryM()->size(), 10, 1010);
+		switch(kmeans.getClusterIDs()[i])
+		{
+		case 0: ofSetColor(255,0,0); break;
+		case 1: ofSetColor(0,255,0); break;
+		case 2: ofSetColor(255,0,255); break;
+		case 3: ofSetColor(255); break;
+		case 4: ofSetColor(0, 255, 255); break;
+		}
 		ofLine(x, y_, x, y_-plotter_height*0.7);	
 	  }
 	}
@@ -328,6 +336,6 @@ void testApp::init_data()
   data_cluster << 2.2, 2.4, 2.1, 1.9, 2.0, 6.3, 5.8, 6.2, 5.9, 6.0, 11.3, 11.0, 11.2, 10.9, 10.8,
 	              1.2, 1.2, 1.0, 1.3, 1.4, 3.4, 3.5, 3.2, 3.1, 3.0, 1.2, 1.3, 1.0, 1.1, 1.0;
  
-  kmeans.cluster(&data_cluster);
+  //kmeans.cluster(&data_cluster);
   //data_cluster.transposeInPlace();
 }

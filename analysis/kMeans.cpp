@@ -2,7 +2,7 @@
 
 //passed in data must be organized into rows-dimensions, cols-observations and MUST be a matrix in RowMajor
 
-void kMeans::cluster(Matrix<float, Dynamic, Dynamic, RowMajor>* dataa)
+void kMeans::cluster(Matrix<float, Dynamic, Dynamic, RowMajor>* dataa, int clusters)
 {
   // ** create new matrix of transposed, cast input data ** //
   temp_data = new Matrix<double, Dynamic, Dynamic, RowMajor>;
@@ -22,19 +22,21 @@ void kMeans::cluster(Matrix<float, Dynamic, Dynamic, RowMajor>* dataa)
 		  mask[i][j] = 1;
   
   // ** perform clustering ** //
-  kmeans(nrows, ncols, data_pointer, mask);
+  kmeans(nrows, ncols, data_pointer, mask, clusters);
 
   // ** free memory ** //
   temp_data->resize(0,0);
   free(temp_data);
 }
 
-void kMeans::kmeans(int nrows, int ncols, double** data, int** mask)
+int* kMeans::getClusterIDs() {return clusterid; }
+
+void kMeans::kmeans(int nrows, int ncols, double** data, int** mask, int clusters)
 {
   int i, j;
-  const int nclusters = 4;
+  const int nclusters = clusters;
   const int transpose = 0;
-  const char dist = 'e';
+  const char dist = 'e'; // 
   const char method = 'a';
   int npass = 1;
   int ifound = 0;
@@ -43,7 +45,7 @@ void kMeans::kmeans(int nrows, int ncols, double** data, int** mask)
   int** index;
   int* count;
   double* weight = (double*) malloc(ncols*sizeof(double));
-  int* clusterid = (int*) malloc(nrows*sizeof(int));
+  clusterid = (int*) malloc(nrows*sizeof(int));
   double** cdata = (double**) malloc(nclusters*sizeof(double*));
   int** cmask = (int**) malloc(nclusters*sizeof(int*));
   for (i = 0; i < nclusters; i++)
@@ -121,7 +123,7 @@ void kMeans::kmeans(int nrows, int ncols, double** data, int** mask)
   }
   free(cdata);
   free(cmask);
-  free(clusterid);
+  //free(clusterid);
   free(weight);
   return;
 }

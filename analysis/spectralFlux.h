@@ -51,7 +51,7 @@ private:
 	float time_resolution; // the temporal detail of the onset peak picking algortithm - in milliseconds
 	int resolution_frames;
 	
-	vector<int> onsets;
+	vector<unsigned int> onsets;
 	float* prunned_flux;
 	//FFT frames
 	MatrixXf fft_data;
@@ -88,19 +88,20 @@ public:
 	void setMeanMult(float m);
 	void setMeanAvgLength(int l);
 
-	void findFluxOnsets();
-	vector<int>* getOnsets();
 	void computePrunnedFlux();
 	float* getPrunnedFlux();
 
-	void computeFluxSig(short* samples, int length);
-	void computeFluxSig(ofxMaxiSample* sample);
-	float** getFluxSigHistory();
+	void findFluxOnsets();
+	vector<unsigned int>* getOnsets();
 
 	void computeOnsetsFFT();
 	MatrixXf* getOnsetsFFT();
 
+	int getBinsSize();
+	int getHopSize();
 	//
 	void updateTail();
-	int getBinsSize();
+	void computeFluxSig(short* samples, int length);
+	void computeFluxSig(ofxMaxiSample* sample);
+	float** getFluxSigHistory();
 };

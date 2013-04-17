@@ -41,6 +41,8 @@ float PCA::getCovariance(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>
 
 // <OPTIM> only calculate the lower triangular side
 // <OPTIM> only calculate the mean once for each dimension
+// Method for computing correlation matrix using Pearson's Correlation Coefficient
+// To be used for data where the dimensions have different scaling
 float PCA::getCorrelation(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y)
 {
 	float x_mean = X->mean();
@@ -74,28 +76,37 @@ void PCA::computeMeanVector(MatrixXf* data)
 	 data_mean(i) = data->row(i).mean();
 	}
 }
-// much butter optimized than the previous one
-void PCA::computeCovarianceMatrix2(MatrixXf* data_, bool bijection)
+// considerably better optimized version of computeCovarianceMatrix
+void PCA::computeCovarianceMatrix2(MatrixXf* data_)
 {
+	// mean vector containing the mean of each row along all observations
 	computeMeanVector(data_);
 	covariance_matrix = MatrixXf(data_->rows(), data_->rows()); 
 	zero_mean_data = MatrixXf(data_->rows(), data_->cols());
+	//subtract mean vector from original data
 	for (int i=0; i<data_->rows(); i++)
 	{
 	 zero_mean_data.row(i) = data_->row(i).array() - data_mean(i);
 	}
+	//calculate covariance matrix by matrix multiplication A*A(transpose)
 	covariance_matrix = (zero_mean_data * zero_mean_data.transpose()); //.array() / data_->cols();
 }
 
+// optimized version for computing a reduced size covariance matrix based on the mathematical proof that
+// there cannot be more NON zero eigenvectors than the number of observations in the data, regardless of the number
+// dimensions
 void PCA::computeCovarianceMatrix2T (MatrixXf* data_)
 {
+	// mean vector containing the mean of each row along all observations
 	computeMeanVector(data_);
 	covariance_matrix = MatrixXf(data_->cols(), data_->cols());
 	zero_mean_data = MatrixXf(data_->rows(), data_->cols());
+	// subtract mean vector from original data
 	for (int i=0; i<data_->rows(); i++)
 	{
 	 zero_mean_data.row(i) = data_->row(i).array() - data_mean(i);
 	}
+	// calculate reduced size covariance matrix by inner dot product - A(transpose)*A
 	 covariance_matrix = (zero_mean_data.transpose() * zero_mean_data);//.array() / data_->cols();
 }
 
@@ -116,6 +127,7 @@ void PCA::computeCovarianceMatrix(Matrix<float, Dynamic, Dynamic>* data)
 	}	
 }
 
+// method computing Pearson's correlation coefficient
 void PCA::computeCorrelationMatrix(Matrix<float, Dynamic, Dynamic>* data)
 {
 	covariance_matrix = MatrixXf(data->rows(), data->rows());
@@ -175,20 +187,20 @@ void PCA::computeFeatureVector(int components)
 	//cout << "Eigenvectors are: " << endl << feature_vector << endl;
 }
 
+// compute eigenvectors of reduced size covariance matrix
 void PCA::computeFeatureVectorT(int components)
 {
 	//<OPTIM> no need to create a new feature_vector in the header, you can just use it temporarly
 	computeFeatureVector(components);
 	//<OPTIM> maybe it can be turned into a single matrix multiplication
 	feature_vector_t = MatrixXf (zero_mean_data.rows(), feature_vector.cols());
+	// compute eigen vectors of reduced covariace matix to match the dimensions of the original data
 	for(int i=0; i<feature_vector.cols();i++)
 	{
 	feature_vector_t.col(i) = zero_mean_data * feature_vector.col(i);
+	// normalize so that the vectors are orthonormal - each of magnitude 1 and at right angles between each other
 	feature_vector_t.col(i).normalize();
 	}
-	//cout << "Eigenvectors are: " << endl << feature_vector_t << endl;
-	//cout << "Eigenvalues are: " << endl << eigen_values << endl;
-	//cout << "Eigenvectors are: " << endl << feature_vector << endl;
 }
 
 // pass in the number of principal components to drop
@@ -215,7 +227,8 @@ void PCA::computeFeatureVectorReduxT(int components)
 
 MatrixXf* PCA::getFeatureVector() { return &feature_vector; }
 
-
+// <!> only to be used when computing Pearson's correlation coefficient
+//unoptimized version of transforming the data
 void PCA::transformData(Matrix<float, Dynamic, Dynamic>* data)
 {
 	// <OPTIM> zero mean data has been previously computed, store that and use, instead of computing again
@@ -227,21 +240,45 @@ void PCA::transformData(Matrix<float, Dynamic, Dynamic>* data)
 		data_mean(i) = data->row(i).mean();
 		zero_mean_data_.row(i) = data->row(i).array() - data_mean(i);
 	}
-
     transformed_data = feature_vector.transpose() * zero_mean_data_;
 }
 
+// optimized version of transforming data
 void PCA::transformData2()
 {
     transformed_data = feature_vector.transpose() * zero_mean_data;
 }
 
+// transforming data on the eigenvectors of the reduced covariance marix
 void PCA::transformData2T()
 {
 	transformed_data = feature_vector_t.transpose() * zero_mean_data;
 }
 
-MatrixXf* PCA::getTransformedData() { return &transformed_data; }
+void PCA::transformData2(MatrixXf* data)
+{
+	zero_mean_data.resize(data->rows(), data->cols());
+	// subtract mean vector from original data
+	for (int i=0; i<data->rows(); i++)
+	{
+	 zero_mean_data.row(i) = data->row(i).array() - data_mean(i);
+	}
+    transformed_data = feature_vector.transpose() * zero_mean_data;
+}
+
+// transforming data on the eigenvectors of the reduced covariance marix
+void PCA::transformData2T(MatrixXf* data)
+{
+	zero_mean_data.resize(data->rows(), data->cols());
+	// subtract mean vector from original data
+	for (int i=0; i<data->rows(); i++)
+	{
+	 zero_mean_data.row(i) = data->row(i).array() - data_mean(i);
+	}
+	transformed_data = feature_vector_t.transpose() * zero_mean_data;
+}
+
+Matrix<float, Dynamic, Dynamic, RowMajor>* PCA::getTransformedData() { return &transformed_data; }
 
 void PCA::reexpressData()
 {
@@ -265,11 +302,14 @@ void PCA::reexpressDataT()
 
 MatrixXf* PCA::getReexpressedData() { return &reexpressed_data; }
 
+
+// <!> edit this so that it can take set of data with more observations
 void PCA::projectData(MatrixXf* data)
 {
 	projected_data = feature_vector_t.transpose() * ((*data) - data_mean);
 }
 
+// to be investigated
 void PCA::distanceToSpace(MatrixXf* data)
 {
 	float distance = 0;

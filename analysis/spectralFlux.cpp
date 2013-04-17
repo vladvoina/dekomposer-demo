@@ -26,6 +26,7 @@ spectralFlux::spectralFlux(int HOP_SIZE_, int WINDOW)
 }
 
 int spectralFlux::getBinsSize() { return BINS_SIZE; }
+int spectralFlux::getHopSize() { return HOP_SIZE; }
 
 // pre-compute fft frames for an audio file
 void spectralFlux::computeFFTData(short* samples, int length, bool scale)
@@ -220,6 +221,7 @@ float* spectralFlux::getPrunnedFlux() { return prunned_flux; }
 
 void spectralFlux::findFluxOnsets()
 {
+	/// clear the vector first, in case function is used more than once
 	onsets.clear();
 	int count=0;
 	while (count<flux_history_length-1)
@@ -236,6 +238,8 @@ void spectralFlux::findFluxOnsets()
 	 count++;
 	}
 }
+
+vector<unsigned int>* spectralFlux::getOnsets() { return &onsets; }
 
 // grabs the fft frames for associated with each onset
 void spectralFlux::computeOnsetsFFT()
@@ -255,9 +259,6 @@ void spectralFlux::computeOnsetsFFT()
 }
 
 MatrixXf* spectralFlux::getOnsetsFFT() { return &onsets_fft; }
-
-
-vector<int>* spectralFlux::getOnsets() { return &onsets; }
 
 
 // <!> revise thorughly - bins_size variable
