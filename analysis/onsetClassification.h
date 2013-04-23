@@ -15,8 +15,10 @@ public:
 	// to pass in multiplier, std avg, etc
 	void setOnsetDetectionParams();
 	void setFFTCrop(int crop);
-	// separation is the number of clusters, precision is the number of dim used in pca
-	void analyse(ofxMaxiSample* sample, int separation, int precision);
+	// separation is the number of clusters, precision is the number of dim used in pca, skip decides whether 
+	// all fft frames of all onsets are used in the training or not, bijection decided whether the reduced coovariance matrix
+	// is computed 
+	void analyse(ofxMaxiSample* sample, int separation, int precision, bool skip=false, bool bijection=true);
 	//
 	vector<unsigned int>*				getOnsets();
 	vector<unsigned long long>* getOnsetsInMillis();

@@ -1,250 +1,199 @@
 #include "testApp.h"
 
- int plotter_height = 130;
- int plotter_y_pos = 430;
 //--------------------------------------------------------------
 void testApp::setup(){
-  ////////////////////////////////////////////////////////////////
-  //                    AUDIO                                   //
-  //////////////////////////////////////////////////////////////// 
-  maxiSettings::setup(44100, 2, 512);
-  sampl.load(ofToDataPath("track40.wav"));
-  sampl2.load(ofToDataPath("Soundset/Kicks2_test.wav"));
-  // ************************************************************
-  /* make sure you call this last*/
-  soundStream.setup(this, 2, 0, maxiSettings::sampleRate, maxiSettings::bufferSize, 4);
-  
-  const int HOP_SIZE = 256; // half the window size
-  //fft.setup(HOP_SIZE*2, HOP_SIZE*2, HOP_SIZE);
-  flux = new spectralFlux(HOP_SIZE, 1024);
-  
-  flux->computeFFTData(&sampl);
-  flux->computeFluxOff();
-  flux->computeFluxThreshold();
-  flux->computePrunnedFlux();
-  flux->findFluxOnsets();
-  flux->computeOnsetsFFT();
 
-  int max_frames = 3;
-  const int fft_crop = 256;
-  //data_chunk = MatrixXf(fft_crop, max_frames);
-  data_chunk = flux->getOnsetsFFT()->topRows(fft_crop);
-  MatrixXf test_frame = data_chunk.col(4);
+    ofBackground(255*.15);
+    ofSetVerticalSync(true);
 
-  pca.computeCovarianceMatrix2T(&data_chunk);
-  pca.computeFeatureVectorT(3);
-  pca.transformData2T();
- 
-  data_cluster = *pca.getTransformedData();
+	/////// MIDI ////////////
+	midiOut.listPorts();
+	midiOut.openPort(2);
 
-  kmeans.cluster(&data_cluster, 5);
+	channel = 1;
+	note_shift = 0;
+	
+	incrementors = new long[5];
+	for (int i=0; i<5; i++) incrementors[i] = 0;
+	// ** probability factor for triggering events
+	probabilities = new int[5];
+	probabilities[0] = 2;
+	probabilities[1] = 3;
+	probabilities[2] = 1;
+	probabilities[3] = 1;
+	probabilities[4] = 2;
+	// ** midi notes sent by the event of each track
+	notes = new int[5];
+	notes[0] = 5;
+	notes[1] = 6;
+	notes[2] = 7;
+	notes[3] = 8;
+	notes[4] = 9;
+	bool load_from_xml = true; //
+	/////////////////////////
+	//ofEnableSmoothing();
+	/////// ANALYSER ////////
+	string track_filename = "demo_track02.wav";
+	maxiSettings::setup(44100, 2, 512);
+    sample1.load(ofToDataPath(track_filename));
 
-  //pca.projectData(&test_frame);
-  //pca.computeDistances();
+	const int clusters = 5;
+	const int dim_reduction = 4;
 
-  pca.reexpressData();
+	onsets = new onsetClassification(256, 1024);
+	if(!load_from_xml) onsets->analyse(&sample1, clusters, dim_reduction, false, false);
+	
+	/////// TIMELINE ////////
+    ofxTimeline::removeCocoaMenusFromGlut("AllTracksExample");
+	timeline.setup();
 
-  
+	timeline.addAudioTrack("audio", track_filename);
+    timeline.setDurationInSeconds(timeline.getAudioTrack("audio")->getDuration());
 
-  data = MatrixXf(1, 5);
-  data << 600, 470, 170, 430, 300;
-	   //   3, 4  , 2  , 5, 6, 3  , 7  , 3, 8 , 9 ;
- 
-/*
-  for (int i=0; i<max_frames; i++)
-  {
-  cout << "TESTING SAMPLE " << i+1 << " >>>>>>>>" << endl;
-  test_data = flux->getFFTData()->block<fft_crop, 1>(0, testvalues[i]);
-  pca.projectData(&test_data);
-  pca.computeDistances();
-  pca.distanceToSpace(&test_data);
-  cout << endl;
-  }
+	timeline.addFlags("Custom Events");
+	timeline.addFlags("Custom Events 2");
+	//timeline.addFlags("Note Shifts");
+	
+	// ** set colors for tracks ** //
+	ofColor* bangs_colors;
+	bangs_colors = new ofColor[clusters];
+	for (int i=0; i<clusters; i++)
+	{
+	bangs_colors[i].setHsb((i * 255.0/(float)clusters), 255, 255);
+	}
+
+	ofxTLColorBangs** bangs = (ofxTLColorBangs**) malloc(clusters*sizeof(ofxTLColorBangs*));
+	//** set up tracks ** //
+	for(int i=0; i<clusters; i++)
+	{
+	 timeline.addColorBangs(ofToString(i+1), bangs_colors[i]);
+	 bangs[i] = (ofxTLColorBangs*) timeline.getTrack(ofToString(i+1));
+
+	 if(!load_from_xml) bangs[i]->clear();
+	}
+
+	//**** annotate onsets on each color bang track **** //
+	if (!load_from_xml)
+	{
+		for(int i=0; i<onsets->getOnsetsInMillis()->size(); i++)
+		{
+		 cout << "-->" << i << endl;
+		   for (int j=0; j<clusters;j++)
+		   {
+			 if(onsets->getIDs()[i] == j)
+			 {
+			  //ofxTLColorBangs* bangs = (ofxTLColorBangs*) timeline.getTrack(ofToString(j+1));
+			  bangs[j]->addKeyframeAtMillis( onsets->getOnsetsInMillis()->at(i));
+			  break;
+			 }
+		   }		
+		 }
+	}
+	timeline.setPageName("Page 1");
+	timeline.setCurrentPage(0);
+
+	timeline.enableSnapToOtherKeyframes(false);
+	timeline.setLoopType(OF_LOOP_NORMAL);
+	
+	ofAddListener(timeline.events().bangFired, this, &testApp::bangFired);
+}
+
+//--------------------------------------------------------------
+void testApp::bangFired(ofxTLBangEventArgs& args){
+	
+	string track_name = args.track->getName(); 
+
+    if (track_name == "1")
+	{
+	 incrementors[0]++; 
+	 if (incrementors[0]%probabilities[0] == 0)
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[0] + note_shift, 64);
+	 } else
+	   {
+		cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	    midiOut.sendNoteOn(channel, 4 + note_shift, 64);
+	   }
+	} else
+	if (track_name == "2")
+	{
+     incrementors[1]++;
+     if (incrementors[1]%probabilities[1] == 0) 
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[1] + note_shift, 64);
+	 } 
+	 /*else
+	   {
+		cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	    midiOut.sendNoteOn(channel, 80 + note_shift, 64);
+	   }
 */
-  
-  ffts = flux->getFFTData()->col(7);
-  ffts2 = data_chunk.col(0);
-  ////////////////////////////////////////////////////////////////
-  //                     PLOTTING                               //
-  ////////////////////////////////////////////////////////////////
- 
-  plotter.setProperties(10, plotter_y_pos, 1000, plotter_height, ofColor(255, 100, 0), "spectral flux", flux->getFluxHistoryM()->size());
-  plotter.autoScaleRange(flux->getFluxHistory());
+	} else
+	if (track_name == "3")
+	{
+	 incrementors[2]++;
+     if (incrementors[2]%probabilities[2] == 0)
+     {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[2] + note_shift, 64);
+	 }
 
-  plotter2.setProperties(10, plotter_y_pos, 1000, plotter_height, ofColor(0, 60, 210), "spectral flux", flux->getFluxHistoryM()->size(), false);
-  plotter2.setRange(plotter.lowRange, plotter.highRange);
+	} else
+	if (track_name == "4")
+	{
+	 incrementors[3]++;
+     if (incrementors[3]%probabilities[3] == 0)
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[3] + note_shift, 64);
+	 }
+	} else
+	if (track_name == "5")
+	{
+	 incrementors[4]++;
+	 if (incrementors[4]%probabilities[4] == 0) 
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[4] + note_shift, 64);
+	 } else
+	   {
+		cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	    midiOut.sendNoteOn(channel, 10 + note_shift, 64);
+	   }
 
-  graph.setProperties(10, 10, 400, 400, ofColor(255, 0, 0), "transformed data", pca.getTransformedData()->cols());
-  graph.setRange(-100, 100);
-  graph2.setProperties(470, 10, 450, 450, ofColor(0, 100, 200), "transformed data", 15);
-  graph2.setRange(-5, 20);
- 
-  NR_OF_PLOTTERS = 1;
-  ROWS = 1;
-  NR_OF_PLOTTERS2 = 1;
-  ROWS2 = 1;
+	} else
+	if (track_name == "Custom Events")
+	{
+     midiOut.sendNoteOn(channel, ofToInt(args.flag), 64);
+	} else
+	if (track_name == "Note Shifts")
+	{
+		note_shift = ofToInt(args.flag);
+	} else
+	if (track_name == "Custom Events 2")
+	{
+	 midiOut.sendNoteOn(channel, ofToInt(args.flag), 64);
+	}
+	
 
-   // --------------- GUI -----------------//
-  ofSetVerticalSync(true); 
-  ofEnableSmoothing(); 
-  gui = new ofxUICanvas(10,ofGetHeight()-80,1100,100);
-  //gui->addSlider("slider",0.0, flux->getFFTData()->cols()-NR_OF_PLOTTERS*ROWS,0.0,600,20);
-  gui->addSlider("slider",0.0, pca.getReexpressedData()->cols()-NR_OF_PLOTTERS*ROWS,0.0,600,20);
-  gui->addWidgetRight(new ofxUISlider("slider2", 0.0, data_chunk.cols()-NR_OF_PLOTTERS2*ROWS2, 0.0, 300, 20));
-  gui->addWidgetDown(new ofxUISlider("std precision", 0.0, 3.0, 0.0, 220, 20));
-  gui->addWidgetRight(new ofxUISlider("std avg length", 3, 100, 30, 220, 20));
-  gui->addWidgetRight(new ofxUISlider("mean mult", 0.0, 2.0, 1.0, 220, 20));
-  gui->addWidgetRight(new ofxUISlider("mean avg length", 5, 60, 15, 220, 20));
-  //gui->addWidgetDown(new ofxUIRangeSlider(990,7, 0.0, 100.0, 0.0, 100.0, "RSLIDER"));
-  ofAddListener(gui->newGUIEvent, this, &testApp::guiEvent);
-  gui->setVisible(true);
-  
-  ///////////////////////////////////////////////////////////////
-  //                      DRAW                                 //
-  ///////////////////////////////////////////////////////////////
-  plotters = new wavePlotter[NR_OF_PLOTTERS*ROWS];
-  int offset = 7;
-  float size_ = (ofGetWidth()-offset*(NR_OF_PLOTTERS+1))/NR_OF_PLOTTERS;
-  float height = size_ * 0.2; cout << "height is:" << height  << endl; 
-  float y_pos = 0;
-  for(int j=0; j<ROWS; j++)
-  {
-	y_pos = offset + (offset + height)*j;
-    for (int i=0; i<NR_OF_PLOTTERS; i++)
-    {
-	  int x = ofMap(i,0, NR_OF_PLOTTERS, offset, ofGetWidth()-offset);
-	  //plotters[NR_OF_PLOTTERS*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "fft", flux->getFFTData()->rows());
-	  plotters[NR_OF_PLOTTERS*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "fft", pca.getReexpressedData()->rows());
-	  plotters[NR_OF_PLOTTERS*j+i].setRange(0, 60);
-	  plotters[NR_OF_PLOTTERS*j+i].setDisplayWindow(0, 100);
-    }
-  }
-  //////////////////////////////////////////////////////////
-  plotters2 = new wavePlotter[NR_OF_PLOTTERS2*ROWS2];
-  for(int j=0; j<ROWS2; j++)
-  {
-	y_pos = offset + (offset + height)*j;
-    for (int i=0; i<NR_OF_PLOTTERS2; i++)
-    {
-	  int x = ofMap(i,0, NR_OF_PLOTTERS2, offset, ofGetWidth()-offset);
-	  plotters2[NR_OF_PLOTTERS2*j+i].setProperties(x, y_pos, size_, height, ofColor(255, 0, 0), "onset ffts", data_chunk.rows());
-	  plotters2[NR_OF_PLOTTERS2*j+i].setRange(0, 60);
-	  plotters2[NR_OF_PLOTTERS2*j+i].setDisplayWindow(0, 100);
-    }
-  }
-
-  ofBackground(0);
-  fbo.allocate(ofGetWidth(), ofGetHeight(), GL_RGBA);
-  fbo2.allocate(ofGetWidth(), ofGetHeight(), GL_RGBA);
-
-  drawFBO1(0);
-  drawFBO2(0);
-  
-  needle_y = 310;
-  onsets = false;
-  thresh_type = false;
-
-  //init_data();
-  
 }
 
 //--------------------------------------------------------------
 void testApp::update(){
-}
-
-//--------------------------------------------------------------------
-void testApp::draw(){
-	//ofEnableBlendMode(OF_BLENDMODE_ALPHA);   
-	ofClear(0,0,0,0);
-	fbo.draw(0, 0);
-	fbo2.draw(0, 215);
-	plotter.draw(flux->getFluxHistory());
-	plotter2.draw(flux->getFluxThresholdHistory());
-	//plotter.draw(ffts);
-	graph.draw(pca.getTransformedData());
-	//graph2.draw(&data_cluster);
-
-	needle_x = ofMap(sampl.position, 0, sampl.length, 10, 1010);
-	ofSetColor(20, 255, 0);
-	ofLine(needle_x, plotter_y_pos+plotter_height, needle_x, plotter_y_pos); 
-	
-	if (onsets)
-	{
-	ofSetColor(255);
-	ofSetLineWidth(1);
-	float y_ = plotter_y_pos + plotter_height;
-	  for (int i=0; i<flux->getOnsets()->size(); i++)
-	  {
-		float x = ofMap((*flux->getOnsets())[i], 0, flux->getFluxHistoryM()->size(), 10, 1010);
-		switch(kmeans.getClusterIDs()[i])
-		{
-		case 0: ofSetColor(255,0,0); break;
-		case 1: ofSetColor(0,255,0); break;
-		case 2: ofSetColor(255,0,255); break;
-		case 3: ofSetColor(255); break;
-		case 4: ofSetColor(0, 255, 255); break;
-		}
-		ofLine(x, y_, x, y_-plotter_height*0.7);	
-	  }
-	}
-}
-
-void testApp::guiEvent(ofxUIEventArgs &e) 
-{
-	if(e.widget->getName() == "slider")
-	{
-		ofxUISlider *rslider = (ofxUISlider *) e.widget;
-     	//plotter.setDisplayWindow(rslider->getScaledValueLow(), rslider->getScaledValueHigh())
-		drawFBO1((int)rslider->getScaledValue());
-	} else
-	if (e.widget->getName() == "slider2")
-	{
-		ofxUISlider *slider = (ofxUISlider *) e.widget;
-		drawFBO2((int)slider->getScaledValue());
-	} else
-    if (e.widget->getName() == "std precision")
-	{
-		
-	} else
-	if (e.widget->getName() == "std avg length")
-	{
-       
-
-	} else
-	if (e.widget->getName() == "mean mult")
-	{
-     
-
-	} else
-	if (e.widget->getName() == "mean avg length")
-	{
-      
-	}
-}
-
-
-//--------------------------------------------------------------------
-void testApp::audioOut(float * output, int bufferSize, int nChannels){
-	
-	for (int i = 0; i<bufferSize; i++)
-	{
-		sample = sampl.play(0.5);
-		//fft.process(sample);
-		//sample = 0;
-		output[i*nChannels    ] = sample * 0.5;
-		output[i*nChannels + 1] = sample * 0.5;
-	}
 
 }
 
 //--------------------------------------------------------------
-void testApp::keyPressed(int key){
+void testApp::draw(){
 
-	if (key == 'o')
-	{
-		onsets = !onsets;
-	}
-	
+	timeline.draw();	
+}
+
+//--------------------------------------------------------------
+void testApp::keyPressed(int key){
+    
 }
 
 //--------------------------------------------------------------
@@ -269,7 +218,7 @@ void testApp::mousePressed(int x, int y, int button){
 
 //--------------------------------------------------------------
 void testApp::mouseReleased(int x, int y, int button){
-	
+
 }
 
 //--------------------------------------------------------------
@@ -289,53 +238,5 @@ void testApp::dragEvent(ofDragInfo dragInfo){
 
 void testApp::exit()
 {
-	delete gui;
-}
-
-void testApp::drawFBO1(int offset)
-{
-  fbo.begin();
-   ofClear(0, 0, 0, 0);
-   ofBackground(0);
-   for(int j=0; j<ROWS; j++)
-   {
-     for (int i=0; i<NR_OF_PLOTTERS; i++)
-     {
-	  //ffts = flux->getFFTData()->col(offset+NR_OF_PLOTTERS*j+i);
-	  ffts = pca.getReexpressedData()->col(offset+NR_OF_PLOTTERS*j+i);
-	  plotters[NR_OF_PLOTTERS*j+i].draw(ffts);
-     }
-   }
-  fbo.end();
-}
-
-void testApp::drawFBO2(int offset)
-{
-  fbo2.begin();
-    ofClear(0, 0, 0, 0);
-    ofBackground(0);
-    for(int j=0; j<ROWS2; j++)
-    {
-      for (int i=0; i<NR_OF_PLOTTERS2; i++)
-      {
-	   ffts2 = data_chunk.col(offset+NR_OF_PLOTTERS2*j+i);  //pca.getReexpressedData()->col(offset+NR_OF_PLOTTERS2*j+i);//flux->getFFTData()->col((int)slider->getScaledValue()+NR_OF_PLOTTERS*j+i);
-	   //pca.getTransformedData()->col((int)slider->getScaledValue()+NR_OF_PLOTTERS2*j+i);
-	   plotters2[NR_OF_PLOTTERS2*j+i].draw(ffts2);
-      }
-    }
-  fbo2.end();
-}
-
-void testApp::init_data()
-{
-  const int nrows = 15;
-  const int ncols = 2;
-  // declare data in header
-  data_cluster.resize(ncols, nrows);
-
-  data_cluster << 2.2, 2.4, 2.1, 1.9, 2.0, 6.3, 5.8, 6.2, 5.9, 6.0, 11.3, 11.0, 11.2, 10.9, 10.8,
-	              1.2, 1.2, 1.0, 1.3, 1.4, 3.4, 3.5, 3.2, 3.1, 3.0, 1.2, 1.3, 1.0, 1.1, 1.0;
- 
-  //kmeans.cluster(&data_cluster);
-  //data_cluster.transposeInPlace();
+	midiOut.closePort();
 }

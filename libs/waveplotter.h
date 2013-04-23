@@ -3,7 +3,6 @@
 
 #include "ofMain.h"
 #include "utils.cpp"
-#include "ofxUI.h"
 #include <Eigen/Dense>
 
 using namespace Eigen;

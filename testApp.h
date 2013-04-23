@@ -1,30 +1,12 @@
 #pragma once
 
-
 #include "ofMain.h"
 #include "ofxMaxim.h"
-#include "waveplotter.h"
-#include "spectralFlux.h"
-#include <Eigen\Dense>
-#include "utils.cpp"
-#include "PCA.h"
-#include "ofxUI.h"
-#include "Graph.h"
-#include "kMeans.h"
+#include "ofxTimeline.h"
+#include "onsetClassification.h"
+#include "ofxMidi.h"
 
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-/*
-extern "C" {
-#include <cluster.h>
-}
-*/
-
-//#include <cluster.h>
-
-using namespace Eigen;
 using namespace std;
 
 class testApp : public ofBaseApp{
@@ -44,66 +26,20 @@ class testApp : public ofBaseApp{
 		void windowResized(int w, int h);
 		void dragEvent(ofDragInfo dragInfo);
 		void gotMessage(ofMessage msg);
+    
+		ofxTimeline timeline;
+		void bangFired(ofxTLBangEventArgs& args);
 
-		void audioOut(float * input, int bufferSize, int nChannels);
-		/// extra functions //
-		void drawFBO1(int offset);
-		void drawFBO2(int offset);
-		// clustering
-		void init_data();
-	    kMeans kmeans;
-		Matrix <float, Dynamic, Dynamic, RowMajor> data_cluster;
+		ofxMaxiSample sample1;
 
-		Matrix<float, 1, Dynamic> returnMatrix(int length);
-		///////////////////////////////////////////////////////////
-		//                    AUDIO MEMBERS                      //
-		///////////////////////////////////////////////////////////
-		MatrixXf data;
+		onsetClassification* onsets;
 
-		ofSoundStream soundStream;
-		int bufferSize, sampleRate;
-
-		double sample;
-		
-		ofxMaxiOsc osc;
-		ofxMaxiSample sampl, sampl2;
-
-		spectralFlux* flux;
-		
-		///////////////////////////////////////////////////////////
-		//                     PLOTTING                          //
-		///////////////////////////////////////////////////////////
-		ofFbo fbo, fbo2;
-		wavePlotter plotter;
-		wavePlotter plotter2;
-		wavePlotter plotter3;
-		bool onsets;
-		float needle_x, needle_y;
-
-		Graph graph, graph2;
-		/////////////////////
-		int NR_OF_PLOTTERS;
-        int ROWS;
-        wavePlotter* plotters;//[NR_OF_PLOTTERS*ROWS];
-		int NR_OF_PLOTTERS2, ROWS2;
-		wavePlotter* plotters2;
-	
-		// -------- GUI ------- //
-		ofxUICanvas *gui;   	
-	    void guiEvent(ofxUIEventArgs &e);
-
-		
-		/////////////////////////////////////////////////////////////
-		//                       OTHER                            //
-		/////////////////////////////////////////////////////////////
-		PCA pca;
-		MatrixXf data_chunk;
-		MatrixXf test_data;
-		VectorXf ffts;
-		VectorXf ffts2;
-		
-		bool thresh_type;
-
-		
+		////// MIDI ///////
+		ofxMidiOut midiOut;
+		int channel;
+		int note_shift;
+		int* notes;
+		int*  probabilities;
+		long* incrementors;
 
 };

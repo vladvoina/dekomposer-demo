@@ -16,8 +16,8 @@ spectralFlux::spectralFlux(int HOP_SIZE_, int WINDOW)
 	/*************************************************************/
 	flux_average_length = 6; // the number of flux frames over which the mean for the threshold is calculated
 	flux_std_length = 30; // the number of flux frames over which the standard deviation for the threshold is calculated
-   	precision = 0.6; // the scaling of the standard deviation
-	multiplier = 1.25; // scaling for the mean to avoid detecting small peaks over sections with very low energy
+   	precision = 0.7; // the scaling of the standard deviation
+	multiplier = 1.4; // scaling for the mean to avoid detecting small peaks over sections with very low energy
 	//<!> does not work well with tunes that have very high energy
 
 	time_resolution = 70; // the minimum time separation between succesive onsets
@@ -237,6 +237,8 @@ void spectralFlux::findFluxOnsets()
 		}
 	 count++;
 	}
+
+	cout << "Number of Onsets: " << onsets.size() << endl;
 }
 
 vector<unsigned int>* spectralFlux::getOnsets() { return &onsets; }
