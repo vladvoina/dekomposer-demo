@@ -1,27 +1,40 @@
 #include "testApp.h"
 
-//--------------------------------------------------------------
+//************************* INSTRUCTIONS ********************************//
+/// ONCE THE APPLICATION IS RUNNING
+// - press SPACE BAR TO START PLAYBACK
+// - click on scrub bar at the top to jump through the track
+//
+// - to perform the analysis on a different track simply include the
+//   track in the bin/data/... folder and change the name of track_filename
+//------------------------------------------------------------------------//
+
 void testApp::setup(){
 
     ofBackground(255*.15);
     ofSetVerticalSync(true);
 
+	/////////////////////////
 	/////// MIDI ////////////
-	midiOut.listPorts();
-	midiOut.openPort(2);
+	/////////////////////////
 
+	midiOut.listPorts();
+	//midiOut.openPort(2);
 	channel = 1;
 	note_shift = 0;
 	
+	// ** probability factor for triggering events
+	// ** 1 - 100%, 2 - 50%, 3 - 33% and so on
 	incrementors = new long[5];
 	for (int i=0; i<5; i++) incrementors[i] = 0;
-	// ** probability factor for triggering events
+
 	probabilities = new int[5];
 	probabilities[0] = 2;
 	probabilities[1] = 3;
 	probabilities[2] = 1;
 	probabilities[3] = 1;
 	probabilities[4] = 2;
+
 	// ** midi notes sent by the event of each track
 	notes = new int[5];
 	notes[0] = 5;
@@ -29,32 +42,38 @@ void testApp::setup(){
 	notes[2] = 7;
 	notes[3] = 8;
 	notes[4] = 9;
-	bool load_from_xml = true; //
-	/////////////////////////
-	//ofEnableSmoothing();
-	/////// ANALYSER ////////
-	string track_filename = "demo_track02.wav";
-	maxiSettings::setup(44100, 2, 512);
-    sample1.load(ofToDataPath(track_filename));
-
-	const int clusters = 5;
-	const int dim_reduction = 4;
-
-	onsets = new onsetClassification(256, 1024);
-	if(!load_from_xml) onsets->analyse(&sample1, clusters, dim_reduction, false, false);
+	bool load_from_xml = false; // set to true when you dont want to perform the analysis
 	
+	/////////////////////////
+	/////// ANALYSER ////////
+	/////////////////////////
+
+	maxiSettings::setup(44100, 2, 512);
+	// ** load sample
+	string track_filename = "track24.wav";  // try jimihaze.wav, electronic.wav, 
+	sample1.load(ofToDataPath(track_filename));
+	//** classification parameters
+	const int clusters = 4; // number of clusters to look for and therefore number of separated tracks
+	const int dim_reduction = 5; // dimentionality of transformed data
+
+	onsets = new onsetClassification(512, 1024);
+	if(!load_from_xml) onsets->analyse(&sample1, clusters, dim_reduction, false, false);
+
+	/////////////////////////
 	/////// TIMELINE ////////
+	/////////////////////////
+
     ofxTimeline::removeCocoaMenusFromGlut("AllTracksExample");
 	timeline.setup();
 
 	timeline.addAudioTrack("audio", track_filename);
     timeline.setDurationInSeconds(timeline.getAudioTrack("audio")->getDuration());
 
-	timeline.addFlags("Custom Events");
-	timeline.addFlags("Custom Events 2");
+	//timeline.addFlags("Custom Events");
+	//timeline.addFlags("Custom Events 2");
 	//timeline.addFlags("Note Shifts");
 	
-	// ** set colors for tracks ** //
+	// ** set a distinct color for each track ** //
 	ofColor* bangs_colors;
 	bangs_colors = new ofColor[clusters];
 	for (int i=0; i<clusters; i++)
@@ -62,14 +81,14 @@ void testApp::setup(){
 	bangs_colors[i].setHsb((i * 255.0/(float)clusters), 255, 255);
 	}
 
-	ofxTLColorBangs** bangs = (ofxTLColorBangs**) malloc(clusters*sizeof(ofxTLColorBangs*));
 	//** set up tracks ** //
+	ofxTLColorBangs** bangs = (ofxTLColorBangs**) malloc(clusters*sizeof(ofxTLColorBangs*));
 	for(int i=0; i<clusters; i++)
 	{
 	 timeline.addColorBangs(ofToString(i+1), bangs_colors[i]);
 	 bangs[i] = (ofxTLColorBangs*) timeline.getTrack(ofToString(i+1));
 
-	 if(!load_from_xml) bangs[i]->clear();
+	 if(!load_from_xml) bangs[i]->clear(); // clear tracks before annotating
 	}
 
 	//**** annotate onsets on each color bang track **** //
@@ -89,6 +108,7 @@ void testApp::setup(){
 		   }		
 		 }
 	}
+
 	timeline.setPageName("Page 1");
 	timeline.setCurrentPage(0);
 
@@ -102,6 +122,7 @@ void testApp::setup(){
 void testApp::bangFired(ofxTLBangEventArgs& args){
 	
 	string track_name = args.track->getName(); 
+	/*
 
     if (track_name == "1")
 	{
@@ -124,12 +145,12 @@ void testApp::bangFired(ofxTLBangEventArgs& args){
 	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
 	  midiOut.sendNoteOn(channel, notes[1] + note_shift, 64);
 	 } 
-	 /*else
+	 else
 	   {
 		cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
 	    midiOut.sendNoteOn(channel, 80 + note_shift, 64);
 	   }
-*/
+
 	} else
 	if (track_name == "3")
 	{
@@ -177,6 +198,7 @@ void testApp::bangFired(ofxTLBangEventArgs& args){
 	 midiOut.sendNoteOn(channel, ofToInt(args.flag), 64);
 	}
 	
+	*/
 
 }
 

@@ -8,17 +8,6 @@ PCA::PCA()
   covariance_progres = 0;
 }
 
-void PCA::process(MatrixXf* input)
-{
-  // very inefficient atm
-  mean = input->mean();
-  zero_mean_data = input->array() - mean;  // <OPTIM> because memory is allocated every time (?) this assignment might be very computationally expensive
-  standard_deviation = sqrt(zero_mean_data.squaredNorm()/zero_mean_data.size());
-  //cout << data << endl;
-}
-float PCA::getMean()	             { return mean; }
-float PCA::getStandardDeviation() { return standard_deviation; }
-
 // it is assumeed that the passed in vectors have the same length
 // can be performed as a vector by vector multiplication
 float PCA::getCovariance(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y)
@@ -112,8 +101,10 @@ void PCA::computeCovarianceMatrix2T (MatrixXf* data_)
 
 // the data is assumed to be organized into rows->dimensions, columns->observations
 // <!> escape duplicate code by adding a boolean to choose between covariance and correlation
+// <!> deprecated because badly optimized - use computeCovarianceMatrix2 or 2T instead
 void PCA::computeCovarianceMatrix(Matrix<float, Dynamic, Dynamic>* data)
 {
+	cout << "!!!!! computeCovarianceMatrix had VERY POOR PERFORMANCE, use computeCovarianceMatrix2 or 2T" << endl;
 	covariance_matrix = MatrixXf(data->rows(), data->rows());
 	
 	for(int i=0; i<data->rows(); i++)
@@ -148,10 +139,10 @@ MatrixXf* PCA::getCovarianceCorrelationMatrix() { return &covariance_matrix; }
 
 void PCA::computeFeatureVector(int components)
 {
+	// perform eigen decomposition, computing the eigenvectors and eigenvalues
 	SelfAdjointEigenSolver<MatrixXf> es(covariance_matrix);
-	//eigen_values = es.eigenvalues().reverse();
 	
-	// can be reversed via Eigen API
+	//** calculate an store all eigenvectors - no demensionality reduction
 	if (components == 0)
 	{
 	// reverse feature_vector so that the vector with the corresponding highest eigenvalue is on top
@@ -162,6 +153,7 @@ void PCA::computeFeatureVector(int components)
 		 feature_vector.col(i) = es.eigenvectors().col(covariance_matrix.rows()-1 - i);
 	  }
 	} else
+    //** reduce the dimensions by the number of components
 	if (components < 0)
 	{
 		// <!> might be problematic. Head() is a vector methdod and eigen_values is a matrix
@@ -173,6 +165,7 @@ void PCA::computeFeatureVector(int components)
 	   }
 
 	} else
+	//** only store the number of dimensions indicated by components
 	if (components > 0)
 	{
 	   eigen_values = es.eigenvalues().reverse().head(components);  
@@ -202,7 +195,7 @@ void PCA::computeFeatureVectorT(int components)
 	feature_vector_t.col(i).normalize();
 	}
 }
-
+//** The Redux Methods will drop high ranked principal components instead of lower ranked
 // pass in the number of principal components to drop
 void PCA::computeFeatureVectorRedux(int components)
 {
@@ -309,7 +302,7 @@ void PCA::projectData(MatrixXf* data)
 	projected_data = feature_vector_t.transpose() * ((*data) - data_mean);
 }
 
-// to be investigated
+// caluculates the distance between the original observation projected and the reduced dimensionlaty re-expression
 void PCA::distanceToSpace(MatrixXf* data)
 {
 	float distance = 0;
@@ -318,6 +311,7 @@ void PCA::distanceToSpace(MatrixXf* data)
 	cout << "Distance to space is: " << distance << endl;
 }
 
+// computes all dinstances between the projected observation and the transformed observations
 void PCA::computeDistances()
 {
 	float distance = 0;
@@ -328,6 +322,18 @@ void PCA::computeDistances()
 	}
 }
 
+
+///// <!> deprecated
+void PCA::process(MatrixXf* input)
+{
+  // very inefficient atm
+  mean = input->mean();
+  zero_mean_data = input->array() - mean;  // <OPTIM> because memory is allocated every time (?) this assignment might be very computationally expensive
+  standard_deviation = sqrt(zero_mean_data.squaredNorm()/zero_mean_data.size());
+  //cout << data << endl;
+}
+float PCA::getMean()	             { return mean; }
+float PCA::getStandardDeviation() { return standard_deviation; }
 
 
 

@@ -17,7 +17,7 @@ spectralFlux::spectralFlux(int HOP_SIZE_, int WINDOW)
 	flux_average_length = 6; // the number of flux frames over which the mean for the threshold is calculated
 	flux_std_length = 30; // the number of flux frames over which the standard deviation for the threshold is calculated
    	precision = 0.7; // the scaling of the standard deviation
-	multiplier = 1.4; // scaling for the mean to avoid detecting small peaks over sections with very low energy
+	multiplier = 1.3; // scaling for the mean to avoid detecting small peaks over sections with very low energy
 	//<!> does not work well with tunes that have very high energy
 
 	time_resolution = 70; // the minimum time separation between succesive onsets
@@ -42,12 +42,14 @@ void spectralFlux::computeFFTData(short* samples, int length, bool scale)
 	
 	for (long i=0; i<length; i++)
     {
+	  // fill buffer with samples
 	  fft.process(samples[i]/32767.0); // <OPTIM> process method to be passed in larger chunks of data
+	  // when hop size is reached store fft frame into the matrix
 	  if (i % HOP_SIZE == 0) // <OPTIM> maybe different if stamement
 	  {
 	     fft.magsToDB();
 	     fft_data.col(count) = fft_;
-		 // adjust range to vary from 0 to 1
+		 // is scale is true adjust range to vary from 0 to 1 <REDUNDANT>
 		 if (scale) fft_data.col(count) = fft_data.col(count).array() / (float) fft_data.col(count).maxCoeff();
 	     count++;
  	  }  
@@ -82,14 +84,15 @@ float spectralFlux::getFlux(float* fft)
 	return flux_t; //
 }
 
-// stores spectral flux function into a vector
+// <REDUNDANT>
+// stores spectral flux function into a vector by computing the fft data under the same method
 void spectralFlux::computeFlux(short* samples, int length)
 {
 
   flux_history_length = (int)(length/HOP_SIZE) + 1; //<!> some matching problems might arise here
   flux_history_matrix = RowVectorXf(flux_history_length);
   
-  // the for loops are separated for optimization - to avoid an if-statement check each itteration
+  // the two for loops are separated for optimization - to avoid an if-statement check each itteration
   int count = 0;
   for (int i=0; i<WINDOW_SIZE; i++)
   {
@@ -114,15 +117,18 @@ void spectralFlux::computeFlux(short* samples, int length)
   }
 }
 
-// non-realtime method for cumputing the flux function
+// non-realtime method for cumputing the flux function the uses the precomputed fft frames
 void spectralFlux::computeFluxOff()
 {
   flux_history_length = fft_data.cols();//(int)(length/HOP_SIZE) + 1; //<!> some matching problems might arise here
   flux_history_matrix = RowVectorXf(flux_history_length);
-  flux_history_matrix(0) = 0;
+  flux_history_matrix(0) = 0; // set first flux value to zero
   
+  // DO NOT compute the flux value for the first index
   for (int i=1; i<flux_history_length; i++)
   {
+	 // compute the difference between two succesive frames, take the absolute, sum the together and divide by the number bins
+	 // all done in one line thank to Eigen reductions
 	 flux_history_matrix(i) = (fft_data.col(i) - fft_data.col(i-1)).array().abs().sum()/BINS_SIZE;
   }
 }
@@ -142,6 +148,8 @@ RowVectorXf* spectralFlux::getFluxHistoryM()
  return &flux_history_matrix;
 }
 
+
+// calculates the threshold only using the data before the frame
 float spectralFlux::getThreshold(int frame)
 {
 	// to avoid stepping out of the array at the beggining of analysis
@@ -149,10 +157,11 @@ float spectralFlux::getThreshold(int frame)
 	{
 	//<OPTIM> avoid this array creation
 	//<OPTIM> set maxMatrix size - look into Eigen reference
-	buffer = flux_history_matrix.block(0, frame-flux_std_length, 1, flux_std_length); 
-	//pca.process(&buffer);
+	
 	//<!> standard deviation only makes sense when calculated across larger buffers
-	//flux_threshold = buffer.mean() * multiplier + pca.getStandardDeviation() * precision;
+	// GRAB BUFFER FOR STANDARD DEVIATION
+	buffer = flux_history_matrix.block(0, frame-flux_std_length, 1, flux_std_length); 
+	// GRAB BUFFER FOR THE AVERAGE
 	flux_threshold = flux_history_matrix.block(0, frame-flux_average_length, 1, flux_average_length).mean() * multiplier +
 		             PCA::getStdDev(&buffer) * precision;
 	} else // <!> can be improved so that the buffer increases gradually
@@ -160,8 +169,8 @@ float spectralFlux::getThreshold(int frame)
 
 	return flux_threshold; // <!> maybe return as pointer
 }
-
-// will calculate the threshold around the frame - half of before, half ahead
+// <REDUNDANT>
+// calculates the threshold around the frame - half of before, half ahead
 float spectralFlux::getThreshold2(int frame)
 {
 	// to avoid stepping out of the array at the beggining and end of flux array
@@ -181,6 +190,8 @@ float spectralFlux::getThreshold2(int frame)
 	return flux_threshold; // <!> maybe return as pointer
 }
 
+// computes the adaptive threshold values across the entire flux function
+// and stores them in the vector flux_threshold
 void spectralFlux::computeFluxThreshold(bool type)
 {
 	flux_threshold_history = new float[flux_history_length];
@@ -201,16 +212,20 @@ void spectralFlux::computeFluxThreshold(bool type)
 
 float* spectralFlux::getFluxThresholdHistory() { return flux_threshold_history; }
 
+// the prunned flux the flux function with the threshold subtracted
+// 
 void spectralFlux::computePrunnedFlux()
 {
   prunned_flux = new float[flux_history_length];
 
+  // run through the whole vectors
   for (int i=0; i<flux_history_length; i++)
   {
-    if (flux_history_matrix(i) > flux_threshold_history[i])
+    if (flux_history_matrix(i) > flux_threshold_history[i]) 
 	{
+	// if the flux exceeds the threshold, compute the difference
     prunned_flux[i] = flux_history_matrix(i) - flux_threshold_history[i];
-	} else
+	} else // otherwise set to zero
 	  {
        prunned_flux[i] = 0;
 	  }
@@ -286,31 +301,4 @@ float* spectralFlux::getFluxSig(float* fft)
 	return flux_sig; //
 }
 
-///////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////
-/*
-void spectralFlux::processFlux(short* samples, int length)
-{
-  flux_history_length = (int)(length/bins_size);
-  flux_history = new float[flux_history_length];
-  
-  int count = 0;
-  for (long i=1; i<length; i++)
-  {
-	  fft.process(samples[i]/32767.0);
-	  //<!> CHANGE TO HOP SIZE
-	  if (i % bins_size == 0)
-	  {
-      //<!> first flux frame is VEERY HIGH - TO FIX
-	  flux_history[count] = getFlux(fft.magsToDB());
-	  count++;
- 	  }  
-  }
-}
 
-void spectralFlux::processFlux(ofxMaxiSample* sample)
-{
-	processFlux(sample->temp,sample->length); 
-}
-
-*/

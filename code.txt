@@ -1,0 +1,1570 @@
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  testApp.h    		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+#pragma once
+
+#include "ofMain.h"
+#include "ofxMaxim.h"
+#include "ofxTimeline.h"
+#include "onsetClassification.h"
+#include "ofxMidi.h"
+
+#include <iostream>
+using namespace std;
+
+class testApp : public ofBaseApp{
+
+	public:
+		void setup();
+		void update();
+		void draw();
+		void exit();
+
+		void keyPressed  (int key);
+		void keyReleased(int key);
+		void mouseMoved(int x, int y );
+		void mouseDragged(int x, int y, int button);
+		void mousePressed(int x, int y, int button);
+		void mouseReleased(int x, int y, int button);
+		void windowResized(int w, int h);
+		void dragEvent(ofDragInfo dragInfo);
+		void gotMessage(ofMessage msg);
+    
+		ofxTimeline timeline;
+		void bangFired(ofxTLBangEventArgs& args);
+
+		ofxMaxiSample sample1;
+
+		onsetClassification* onsets;
+
+		////// MIDI ///////
+		ofxMidiOut midiOut;
+		int channel;
+		int note_shift;
+		int* notes;
+		int*  probabilities;
+		long* incrementors;
+
+};
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  testApp.cpp    		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+#include "testApp.h"
+
+//************************* INSTRUCTIONS ********************************//
+/// ONCE THE APPLICATION IS RUNNING
+// - press SPACE BAR TO START PLAYBACK
+// - click on scrub bar at the top to jump through the track
+//
+// - to perform the analysis on a different track simply include the
+//   track in the bin/data/... folder and change the name of track_filename
+//------------------------------------------------------------------------//
+
+void testApp::setup(){
+
+    ofBackground(255*.15);
+    ofSetVerticalSync(true);
+
+	/////////////////////////
+	/////// MIDI ////////////
+	/////////////////////////
+
+	midiOut.listPorts();
+	//midiOut.openPort(2);
+	channel = 1;
+	note_shift = 0;
+	
+	// ** probability factor for triggering events
+	// ** 1 - 100%, 2 - 50%, 3 - 33% and so on
+	incrementors = new long[5];
+	for (int i=0; i<5; i++) incrementors[i] = 0;
+
+	probabilities = new int[5];
+	probabilities[0] = 2;
+	probabilities[1] = 3;
+	probabilities[2] = 1;
+	probabilities[3] = 1;
+	probabilities[4] = 2;
+
+	// ** midi notes sent by the event of each track
+	notes = new int[5];
+	notes[0] = 5;
+	notes[1] = 6;
+	notes[2] = 7;
+	notes[3] = 8;
+	notes[4] = 9;
+	bool load_from_xml = false; // set to true when you dont want to perform the analysis
+	
+	/////////////////////////
+	/////// ANALYSER ////////
+	/////////////////////////
+
+	maxiSettings::setup(44100, 2, 512);
+	// ** load sample
+	string track_filename = "track24.wav";  // try jimihaze.wav, electronic.wav, 
+	sample1.load(ofToDataPath(track_filename));
+	//** classification parameters
+	const int clusters = 4; // number of clusters to look for and therefore number of separated tracks
+	const int dim_reduction = 5; // dimentionality of transformed data
+
+	onsets = new onsetClassification(512, 1024);
+	if(!load_from_xml) onsets->analyse(&sample1, clusters, dim_reduction, false, false);
+
+	/////////////////////////
+	/////// TIMELINE ////////
+	/////////////////////////
+
+    ofxTimeline::removeCocoaMenusFromGlut("AllTracksExample");
+	timeline.setup();
+
+	timeline.addAudioTrack("audio", track_filename);
+    timeline.setDurationInSeconds(timeline.getAudioTrack("audio")->getDuration());
+
+	//timeline.addFlags("Custom Events");
+	//timeline.addFlags("Custom Events 2");
+	//timeline.addFlags("Note Shifts");
+	
+	// ** set a distinct color for each track ** //
+	ofColor* bangs_colors;
+	bangs_colors = new ofColor[clusters];
+	for (int i=0; i<clusters; i++)
+	{
+	bangs_colors[i].setHsb((i * 255.0/(float)clusters), 255, 255);
+	}
+
+	//** set up tracks ** //
+	ofxTLColorBangs** bangs = (ofxTLColorBangs**) malloc(clusters*sizeof(ofxTLColorBangs*));
+	for(int i=0; i<clusters; i++)
+	{
+	 timeline.addColorBangs(ofToString(i+1), bangs_colors[i]);
+	 bangs[i] = (ofxTLColorBangs*) timeline.getTrack(ofToString(i+1));
+
+	 if(!load_from_xml) bangs[i]->clear(); // clear tracks before annotating
+	}
+
+	//**** annotate onsets on each color bang track **** //
+	if (!load_from_xml)
+	{
+		for(int i=0; i<onsets->getOnsetsInMillis()->size(); i++)
+		{
+		 cout << "-->" << i << endl;
+		   for (int j=0; j<clusters;j++)
+		   {
+			 if(onsets->getIDs()[i] == j)
+			 {
+			  //ofxTLColorBangs* bangs = (ofxTLColorBangs*) timeline.getTrack(ofToString(j+1));
+			  bangs[j]->addKeyframeAtMillis( onsets->getOnsetsInMillis()->at(i));
+			  break;
+			 }
+		   }		
+		 }
+	}
+
+	timeline.setPageName("Page 1");
+	timeline.setCurrentPage(0);
+
+	timeline.enableSnapToOtherKeyframes(false);
+	timeline.setLoopType(OF_LOOP_NORMAL);
+	
+	ofAddListener(timeline.events().bangFired, this, &testApp::bangFired);
+}
+
+//--------------------------------------------------------------
+void testApp::bangFired(ofxTLBangEventArgs& args){
+	
+	string track_name = args.track->getName(); 
+	/*
+
+    if (track_name == "1")
+	{
+	 incrementors[0]++; 
+	 if (incrementors[0]%probabilities[0] == 0)
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[0] + note_shift, 64);
+	 } else
+	   {
+		cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	    midiOut.sendNoteOn(channel, 4 + note_shift, 64);
+	   }
+	} else
+	if (track_name == "2")
+	{
+     incrementors[1]++;
+     if (incrementors[1]%probabilities[1] == 0) 
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[1] + note_shift, 64);
+	 } 
+	 else
+	   {
+		cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	    midiOut.sendNoteOn(channel, 80 + note_shift, 64);
+	   }
+
+	} else
+	if (track_name == "3")
+	{
+	 incrementors[2]++;
+     if (incrementors[2]%probabilities[2] == 0)
+     {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[2] + note_shift, 64);
+	 }
+
+	} else
+	if (track_name == "4")
+	{
+	 incrementors[3]++;
+     if (incrementors[3]%probabilities[3] == 0)
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[3] + note_shift, 64);
+	 }
+	} else
+	if (track_name == "5")
+	{
+	 incrementors[4]++;
+	 if (incrementors[4]%probabilities[4] == 0) 
+	 {
+	  cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	  midiOut.sendNoteOn(channel, notes[4] + note_shift, 64);
+	 } else
+	   {
+		cout << "bang fired! " << args.flag << " " << args.track->getName() << endl;
+	    midiOut.sendNoteOn(channel, 10 + note_shift, 64);
+	   }
+
+	} else
+	if (track_name == "Custom Events")
+	{
+     midiOut.sendNoteOn(channel, ofToInt(args.flag), 64);
+	} else
+	if (track_name == "Note Shifts")
+	{
+		note_shift = ofToInt(args.flag);
+	} else
+	if (track_name == "Custom Events 2")
+	{
+	 midiOut.sendNoteOn(channel, ofToInt(args.flag), 64);
+	}
+	
+	*/
+
+}
+
+//--------------------------------------------------------------
+void testApp::update(){
+
+}
+
+//--------------------------------------------------------------
+void testApp::draw(){
+
+	timeline.draw();	
+}
+
+//--------------------------------------------------------------
+void testApp::keyPressed(int key){
+    
+}
+
+//--------------------------------------------------------------
+void testApp::keyReleased(int key){
+
+}
+
+//--------------------------------------------------------------
+void testApp::mouseMoved(int x, int y ){
+
+}
+
+//--------------------------------------------------------------
+void testApp::mouseDragged(int x, int y, int button){
+
+}
+
+//--------------------------------------------------------------
+void testApp::mousePressed(int x, int y, int button){
+
+}
+
+//--------------------------------------------------------------
+void testApp::mouseReleased(int x, int y, int button){
+
+}
+
+//--------------------------------------------------------------
+void testApp::windowResized(int w, int h){
+
+}
+
+//--------------------------------------------------------------
+void testApp::gotMessage(ofMessage msg){
+
+}
+
+//--------------------------------------------------------------
+void testApp::dragEvent(ofDragInfo dragInfo){ 
+
+}
+
+void testApp::exit()
+{
+	midiOut.closePort();
+}
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  main.cpp    		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+#include "ofMain.h"
+#include "testApp.h"
+#include "ofAppGlutWindow.h"
+
+//========================================================================
+int main( ){
+
+    ofAppGlutWindow window;
+	ofSetupOpenGL(&window, 900,565, OF_WINDOW);			// <-------- setup the GL context
+
+	// this kicks off the running of my app
+	// can be OF_WINDOW or OF_FULLSCREEN
+	// pass in width and height too:
+	ofRunApp( new testApp());
+
+}
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  kMeans.h    		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+/// ***************************************************************************
+// THIS CLASS HAS BEEN CREATED BASED ON THE EXAMPLE IN THE C Clustering Library
+// ****************************************************************************
+
+#pragma once
+
+#include <Eigen\Dense>
+#include <stdio.h>
+#include <stdlib.h>
+
+extern "C" {
+#include <cluster.h>
+}
+
+using namespace Eigen;
+
+class kMeans {
+private:
+	// temp matrix to store a row major representation of the input data
+	Matrix<double, Dynamic, Dynamic, RowMajor>* temp_data;
+	int* clusterid; // array to store the IDs
+	// method taken from the example in the C Clustering Library
+	void kmeans(int nrows, int ncols, double** data, int** mask, int clusters);
+
+public:
+	void cluster(Matrix<float, Dynamic, Dynamic, RowMajor>* dataa, int clusters);
+	int* getClusterIDs();
+};
+
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  kMeans.cpp   		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+#include "kMeans.h"
+
+//passed in data must be organized into rows-dimensions, cols-observations and MUST be a matrix in RowMajor
+void kMeans::cluster(Matrix<float, Dynamic, Dynamic, RowMajor>* dataa, int clusters)
+{
+  // ** create new matrix of transposed, cast input data ** //
+  temp_data = new Matrix<double, Dynamic, Dynamic, RowMajor>;
+  (*temp_data) = dataa->transpose().cast<double>(); 
+  const int nrows = temp_data->rows();
+  const int ncols = temp_data->cols();
+  // ** create pointer to the data within the matrix ** //
+  double** data_pointer;
+  data_pointer = (double**) malloc(temp_data->rows()*sizeof(double*));
+  for (int i=0; i<temp_data->rows(); i++) data_pointer[i] = &(*temp_data)(i, 0);
+
+  // ** create mask ** //
+  int** mask = (int**) malloc(nrows * sizeof(int*));
+  for(int i=0; i<nrows; i++) mask[i] = (int*) malloc(ncols*sizeof(int));
+  for(int i=0; i<nrows; i++)
+	  for(int j=0; j<ncols;j++)
+		  mask[i][j] = 1;
+  
+  // ** perform clustering ** //
+  kmeans(nrows, ncols, data_pointer, mask, clusters);
+
+  // ** free memory ** //
+  temp_data->resize(0,0);
+  free(temp_data);
+}
+
+int* kMeans::getClusterIDs() {return clusterid; }
+
+void kMeans::kmeans(int nrows, int ncols, double** data, int** mask, int clusters)
+{
+  int i, j;
+  const int nclusters = clusters;
+  const int transpose = 0;
+  const char dist = 'e'; // euclidean distance
+  const char method = 'a';
+  int npass = 1;
+  int ifound = 0;
+  double error;
+  double distance;
+  int** index;
+  int* count;
+  double* weight = (double*) malloc(ncols*sizeof(double));
+  clusterid = (int*) malloc(nrows*sizeof(int));
+  double** cdata = (double**) malloc(nclusters*sizeof(double*));
+  int** cmask = (int**) malloc(nclusters*sizeof(int*));
+  for (i = 0; i < nclusters; i++)
+  { cdata[i] = (double*) malloc(ncols*sizeof(double));
+    cmask[i] = (int*) malloc(ncols*sizeof(int));
+  }
+  for (i = 0; i < ncols; i++) weight[i] = 1.0;
+  printf("======================== k-means clustering ====================\n");
+  printf("\n");
+  printf("----- one pass of the EM algorithm (results may change)\n");
+  kcluster(nclusters,nrows,ncols,data,mask,weight,transpose,npass,method,dist, 
+    clusterid, &error, &ifound);
+  printf ("Solution found %d times; within-cluster sum of distances is %f\n",
+    ifound, error);
+  printf ("Cluster assignments:\n");
+  for (i = 0; i < nrows; i++)
+    printf ("Gene %d: cluster %d\n", i, clusterid[i]);
+
+  printf ("\n");
+  printf("----- 1000 passes of the EM algorithm (result should not change)\n");
+  npass = 1000;
+  kcluster(nclusters,nrows,ncols,data,mask,weight,transpose,npass,method,dist, 
+    clusterid, &error, &ifound);
+  printf ("Solution found %d times; ", ifound);
+  printf ("within-cluster sum of distances is %f\n", error);
+  printf ("Cluster assignments:\n");
+  for (i = 0; i < nrows; i++)
+    printf ("Gene %d: cluster %d\n", i, clusterid[i]);
+  printf ("\n");
+  printf ("------- Distance between clusters:\n");
+  index = (int**) malloc(nclusters*sizeof(int*));
+  count = (int*) malloc(nclusters*sizeof(int));
+  for (i = 0; i < nclusters; i++) count[i] = 0;
+  for (i = 0; i < nrows; i++) count[clusterid[i]]++;
+  for (i = 0; i < nclusters; i++) index[i] = (int*) malloc(count[i]*sizeof(int));
+  for (i = 0; i < nclusters; i++) count[i] = 0;
+  for (i = 0; i < nrows; i++)
+  { int id = clusterid[i];
+    index[id][count[id]] = i;
+    count[id]++;
+  }  
+  distance =
+    clusterdistance(nrows, ncols, data, mask, weight, count[0], count[1],
+		    index[0], index[1], 'e', 'a', 0); 
+  printf("Distance between 0 and 1: %7.3f\n", distance);
+  distance =
+    clusterdistance(nrows, ncols, data, mask, weight, count[0], count[2],
+		    index[0], index[2], 'e', 'a', 0); 
+  printf("Distance between 0 and 2: %7.3f\n", distance);
+  distance =
+    clusterdistance(nrows, ncols, data, mask, weight, count[1], count[2],
+		    index[1], index[2], 'e', 'a', 0); 
+  printf("Distance between 1 and 2: %7.3f\n", distance);
+
+  printf ("\n");
+  printf ("------- Cluster centroids:\n");
+  getclustercentroids(nclusters, nrows, ncols, data, mask, clusterid,
+                      cdata, cmask, 0, 'a');
+  printf("   Microarray:");
+  for(i=0; i<ncols; i++) printf("\t%7d", i);
+  printf("\n");
+  for (i = 0; i < nclusters; i++)
+  { printf("Cluster %2d:", i);
+    for (j = 0; j < ncols; j++) printf("\t%7.3f", cdata[i][j]);
+    printf("\n");
+  }
+  printf("\n");
+  for (i = 0; i < nclusters; i++) free(index[i]);
+  free(index);
+  free(count);
+
+  for (i = 0; i < nclusters; i++)
+  { free(cdata[i]);
+    free(cmask[i]);
+  }
+  free(cdata);
+  free(cmask);
+  //free(clusterid);
+  free(weight);
+  return;
+}
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//            onsetClassification.h               //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+//**********************************************
+// Collector class for the audio analysis module
+//**********************************************
+
+#pragma once
+
+#include "ofxMaxim.h"
+
+#include "spectralFlux.h"
+#include "PCA.h"
+#include "kMeans.h"
+
+class onsetClassification {
+
+
+public:
+	onsetClassification(int hop_size, int window_size);
+	~onsetClassification();
+
+	// the fft crop is the number of fft bins to use in the classification - starting from the low end
+	void setFFTCrop(int crop);
+	// separation is the number of clusters, precision is the number of dim used in pca, skip decides whether 
+	// all fft frames of all onsets are used in the training or not, bijection decided whether the reduced coovariance matrix
+	// is computed 
+	void analyse(ofxMaxiSample* sample, int separation, int precision, bool skip=false, bool bijection=true);
+	//
+	vector<unsigned int>*				getOnsets();
+	vector<unsigned long long>* getOnsetsInMillis();
+	int* getIDs();
+	
+private:
+	//vector<int> onsets;
+	// only use the first half of the fft frame in the analysis because very high frequency content is not that relevant
+	int fft_crop;
+	vector<unsigned long long> onsets_in_millis;
+
+	spectralFlux* flux;
+	PCA* pca;
+	kMeans* kmeans;
+
+
+
+};
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//            onsetClassification.cpp             //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+#include "onsetClassification.h"
+
+#include <iostream>
+using namespace std;
+
+
+onsetClassification::onsetClassification(int hop_size, int window_size)
+{
+  flux = new spectralFlux(hop_size, window_size);
+  pca = new PCA();
+  kmeans = new kMeans();
+
+  setFFTCrop(flux->getBinsSize()/2); // default fft crop
+}
+
+
+void onsetClassification::setFFTCrop(int crop)
+{
+	fft_crop = crop;
+}
+
+
+// set skip to true if track is long (this will only use chunks of fft frames for computing the feature space)
+// set bijection to true if testing on loops or short extracts where the number of onsets is less than the number
+// of dimensions
+void onsetClassification::analyse(ofxMaxiSample* sample, int separation, int precision, bool skip, bool bijection)
+{
+  // detect onsets
+  cout << "Computing Onsets..." << endl;
+  flux->computeFFTData(sample);
+  flux->computeFluxOff();
+  flux->computeFluxThreshold();
+  flux->computePrunnedFlux();
+  flux->findFluxOnsets();
+  flux->computeOnsetsFFT();
+  // calculate onsets in millis
+  onsets_in_millis.resize(flux->getOnsets()->size());
+  for (int i=0; i<onsets_in_millis.size();i++)
+  {
+	onsets_in_millis[i] = (unsigned long long) ((*flux->getOnsets())[i] * ((float)flux->getHopSize()/(float)44100) * 1000);
+  }
+
+  // calculate feature space
+  // if track is long, there is not point training the system with the same onsets over and over
+  // as it takes too long to compute, so only use sets (chunks) of onsets for the training
+  MatrixXf data_chunk = flux->getOnsetsFFT()->topRows(fft_crop);
+  if (skip)
+  {
+	  int gap_size = 20;
+	  int set_size = 10;
+	  int long_head = 0;
+	  int short_head = 0;
+  
+	  // run once just to find the size of array contating the reduced number of onsets
+	  while (long_head < data_chunk.cols()-set_size)
+	  {
+		  for(int i=long_head; i<long_head+set_size; i++)
+		  {
+		   short_head++;
+		  }
+	   long_head+= set_size + gap_size;
+	  }
+	  cout << "Reduced Training Onsets Set is of size: " << short_head+1 << endl;
+	  MatrixXf data_chunk_skipped(data_chunk.rows(), short_head+1);
+
+	  long_head = 0; short_head = 0;
+	  // assign to new array
+	  while (long_head < data_chunk.cols()-set_size)
+	  {
+		  for(int i=long_head; i<long_head+set_size; i++)
+		  {
+			  data_chunk_skipped.col(short_head) = data_chunk.col(i);
+			  short_head++;
+		  }
+	   long_head+=set_size + gap_size;
+	  }
+	//
+	  if (bijection) { pca->computeCovarianceMatrix2T(&data_chunk_skipped); }
+	  else           { pca->computeCovarianceMatrix2 (&data_chunk_skipped); }
+   } else
+     {
+      if (bijection) { pca->computeCovarianceMatrix2T(&data_chunk); }
+	  else           { pca->computeCovarianceMatrix2 (&data_chunk); }
+     }
+  if (bijection)
+  {
+  cout << "Deriving Feature Space..." << endl;
+  pca->computeFeatureVectorT(precision);
+  pca->transformData2T(&data_chunk);
+  } else 
+    {
+	 cout <<"Deriving Feature Space..." << endl;
+     pca->computeFeatureVector(precision);
+     pca->transformData2(&data_chunk);
+    }
+  
+  // clustering
+  cout <<"Performing Clustering..." << endl;
+  kmeans->cluster(pca->getTransformedData(), separation);
+}
+
+vector<unsigned int>* onsetClassification::getOnsets() { return flux->getOnsets(); }
+vector<unsigned long long>* onsetClassification::getOnsetsInMillis() {return &onsets_in_millis;}
+
+int* onsetClassification::getIDs() { return kmeans->getClusterIDs(); }
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  PCA.h                         //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+#pragma once
+
+#include <Eigen\Dense>
+#include <iostream>
+#include <cmath>
+#include <vector>
+
+using namespace std;
+using namespace Eigen;
+
+class PCA {
+private:
+	// - Passed in data must be structured in a: ROWS - DIMENSIONS, COLUMNS - OBSERVATIONS (frames)
+	// - The data will be processed depending on the number of observations
+	// - If the input data are of Eigen datatype dimension information is not necessary
+	
+	MatrixXf zero_mean_data;    // data with the mean of each row subtracted from each coefficient
+	MatrixXf covariance_matrix; // covariance matrix - symetric matrix
+	MatrixXf feature_vector;    // matrix contaning the reduced or full number of eigenvectors stored in columns in descending order
+	MatrixXf feature_vector_t;  // same as above for the optimized reduced covariance matrix
+	MatrixXf eigen_values;      // vector for storing the eigenvalues
+	//MatrixXf transformed_data;  
+	Matrix<float, Dynamic, Dynamic, RowMajor> transformed_data; // expression of original data onto the new eigenvectors basis
+	MatrixXf reexpressed_data;  // re-expression onto original coordinate system - if no dimensions are reduced data should be exactly the same
+	MatrixXf projected_data;    // matrix to store on onservation of data that is used in the computeDistances() method
+	
+	VectorXf data_mean; // mean vector containing the mean of each row
+	float mean;
+	float standard_deviation;
+	
+	// testing
+	long covariance_progres;
+
+public:
+	PCA();
+	void process(MatrixXf* data);  // <!> deprecated
+	float getMean();			   // <!> deprecated
+	float getStandardDeviation();  // <!> deprecated 
+	
+	// STATIC METHOD
+	// calculates the standard deviation of the input vector
+	static float getStdDev(MatrixXf* input)
+	{
+	  return sqrt((input->array() - input->mean()).matrix().squaredNorm()/input->size());
+	}
+
+	// original functions <!> deprecated
+	float getCovariance(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y);
+	float getCorrelation(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y);
+	void computeCovarianceMatrix(Matrix<float, Dynamic, Dynamic>* data);
+	void computeCorrelationMatrix(Matrix<float, Dynamic, Dynamic>* data);
+	
+	// optimized functions
+	void computeMeanVector(MatrixXf* data); //
+	void computeCovarianceMatrix2 (MatrixXf* data); // compute covariance matrix <- use if number of observations
+													// is higher than the number of dimensions
+	void computeCovarianceMatrix2T(MatrixXf* data); // compute reduced covariance matrix <- use if number of observations
+													// is smaller than the number of dimensions
+	MatrixXf* getCovarianceCorrelationMatrix();
+	
+	// 0 for all components, positive for first highest, negative how many to drop from the end
+	void computeFeatureVector (int components = 0);
+	void computeFeatureVectorT(int components = 0);
+	 // drop prinicipal components - component indicates the number of principal components to drop starting from the highest
+	void computeFeatureVectorRedux(int components);
+	void computeFeatureVectorReduxT(int components);
+	MatrixXf* getFeatureVector();
+	
+	void transformData(Matrix<float, Dynamic, Dynamic>* data);
+	// optimized
+	//** transforms data that was used for exatracting eigenvectos 
+	void transformData2();
+	void transformData2T();
+	//** transforms input data - methods to be used if the data to be projected is not the same with the training data
+	void transformData2 (MatrixXf* data);
+	void transformData2T(MatrixXf* data); 
+	Matrix<float, Dynamic, Dynamic, RowMajor>* getTransformedData();
+
+	void reexpressData();
+	void reexpressDataT();
+	MatrixXf* getReexpressedData();
+
+	// <!> only vectos to be passed in here yet
+	void projectData(MatrixXf* data);
+	// <!> need revision
+	void distanceToSpace(MatrixXf* data);
+	void computeDistances();
+
+};
+
+
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  PCA.cpp      		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+
+
+
+#include "PCA.h"
+
+
+PCA::PCA()
+{
+  mean = 0;
+  standard_deviation = 0;
+  covariance_progres = 0;
+}
+
+// it is assumeed that the passed in vectors have the same length
+// can be performed as a vector by vector multiplication
+float PCA::getCovariance(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y)
+{
+	//covariance_progres++;
+	//cout << " " << covariance_progres;
+	float x_mean = X->mean();
+	float y_mean = Y->mean();
+	float covariance = 0;
+
+	for (int i=0; i<X->size(); i++)
+	{
+	covariance += ((*X)(i)-x_mean)*((*Y)(i)-y_mean);
+	}
+
+	covariance /= X->size() - 1;
+	
+	return covariance;
+}
+
+// <OPTIM> only calculate the lower triangular side
+// <OPTIM> only calculate the mean once for each dimension
+// Method for computing correlation matrix using Pearson's Correlation Coefficient
+// To be used for data where the dimensions have different scaling
+float PCA::getCorrelation(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y)
+{
+	float x_mean = X->mean();
+	float y_mean = Y->mean();
+	float zero_mean_x = 0;
+	float zero_mean_y = 0;
+	float correlation = 0;
+	float std_dev_x = 0;
+	float std_dev_y = 0;
+
+	for (int i=0; i<X->size(); i++)
+	{
+    zero_mean_x = (*X)(i)-x_mean;
+	zero_mean_y = (*Y)(i)-y_mean;
+	std_dev_x += zero_mean_x*zero_mean_x;
+	std_dev_y += zero_mean_y*zero_mean_y;
+	correlation += zero_mean_x*zero_mean_y;
+	}
+
+	std_dev_x = sqrt(std_dev_x/X->size());
+	std_dev_y = sqrt(std_dev_y/X->size());
+	correlation = correlation/(X->size()*std_dev_x*std_dev_y);
+	return correlation;
+}
+
+void PCA::computeMeanVector(MatrixXf* data)
+{
+	data_mean = VectorXf(data->rows());
+	for (int i=0; i<data->rows(); i++)
+	{
+	 data_mean(i) = data->row(i).mean();
+	}
+}
+// considerably better optimized version of computeCovarianceMatrix
+void PCA::computeCovarianceMatrix2(MatrixXf* data_)
+{
+	// mean vector containing the mean of each row along all observations
+	computeMeanVector(data_);
+	covariance_matrix = MatrixXf(data_->rows(), data_->rows()); 
+	zero_mean_data = MatrixXf(data_->rows(), data_->cols());
+	//subtract mean vector from original data
+	for (int i=0; i<data_->rows(); i++)
+	{
+	 zero_mean_data.row(i) = data_->row(i).array() - data_mean(i);
+	}
+	//calculate covariance matrix by matrix multiplication A*A(transpose)
+	covariance_matrix = (zero_mean_data * zero_mean_data.transpose()); //.array() / data_->cols();
+}
+
+// optimized version for computing a reduced size covariance matrix based on the mathematical proof that
+// there cannot be more NON zero eigenvectors than the number of observations in the data, regardless of the number
+// dimensions
+void PCA::computeCovarianceMatrix2T (MatrixXf* data_)
+{
+	// mean vector containing the mean of each row along all observations
+	computeMeanVector(data_);
+	covariance_matrix = MatrixXf(data_->cols(), data_->cols());
+	zero_mean_data = MatrixXf(data_->rows(), data_->cols());
+	// subtract mean vector from original data
+	for (int i=0; i<data_->rows(); i++)
+	{
+	 zero_mean_data.row(i) = data_->row(i).array() - data_mean(i);
+	}
+	// calculate reduced size covariance matrix by inner dot product - A(transpose)*A
+	 covariance_matrix = (zero_mean_data.transpose() * zero_mean_data);//.array() / data_->cols();
+}
+
+// the data is assumed to be organized into rows->dimensions, columns->observations
+// <!> escape duplicate code by adding a boolean to choose between covariance and correlation
+// <!> deprecated because badly optimized - use computeCovarianceMatrix2 or 2T instead
+void PCA::computeCovarianceMatrix(Matrix<float, Dynamic, Dynamic>* data)
+{
+	cout << "!!!!! computeCovarianceMatrix had VERY POOR PERFORMANCE, use computeCovarianceMatrix2 or 2T" << endl;
+	covariance_matrix = MatrixXf(data->rows(), data->rows());
+	
+	for(int i=0; i<data->rows(); i++)
+	{
+      for(int j=0; j<data->rows(); j++)
+	  {
+		 RowVectorXf row1 = data->row(i); /// <OPTIM> allocating an array each calculation can be very expensive  
+		 RowVectorXf row2 = data->row(j);
+		 covariance_matrix(i,j) = getCovariance(&row1, &row2);
+	  }
+	}	
+}
+
+// method computing Pearson's correlation coefficient
+void PCA::computeCorrelationMatrix(Matrix<float, Dynamic, Dynamic>* data)
+{
+	covariance_matrix = MatrixXf(data->rows(), data->rows());
+	
+	for(int i=0; i<data->rows(); i++)
+	{
+      for(int j=0; j<data->rows(); j++)
+	  {
+		 RowVectorXf row1 = data->row(i); /// <OPTIM> allocating an array each calculation can be very expensive  
+		 RowVectorXf row2 = data->row(j);
+		 covariance_matrix(i,j) = getCorrelation(&row1, &row2);
+	  }
+	}	
+}
+
+// error message if not computed
+MatrixXf* PCA::getCovarianceCorrelationMatrix() { return &covariance_matrix; }
+
+void PCA::computeFeatureVector(int components)
+{
+	// perform eigen decomposition, computing the eigenvectors and eigenvalues
+	SelfAdjointEigenSolver<MatrixXf> es(covariance_matrix);
+	
+	//** calculate an store all eigenvectors - no demensionality reduction
+	if (components == 0)
+	{
+	// reverse feature_vector so that the vector with the corresponding highest eigenvalue is on top
+      eigen_values = es.eigenvalues().reverse();
+	  feature_vector = MatrixXf(covariance_matrix.rows(), covariance_matrix.rows());
+      for (int i=0; i<covariance_matrix.rows(); i++)
+	  {
+		 feature_vector.col(i) = es.eigenvectors().col(covariance_matrix.rows()-1 - i);
+	  }
+	} else
+    //** reduce the dimensions by the number of components
+	if (components < 0)
+	{
+		// <!> might be problematic. Head() is a vector methdod and eigen_values is a matrix
+	   eigen_values = es.eigenvalues().reverse().head(es.eigenvalues().cols()+components);
+	   feature_vector = MatrixXf(covariance_matrix.rows(), covariance_matrix.rows()+components);
+	   for (int i=0; i<covariance_matrix.rows()+components; i++)
+	   {
+		 feature_vector.col(i) = es.eigenvectors().col(covariance_matrix.rows()-1 - i);
+	   }
+
+	} else
+	//** only store the number of dimensions indicated by components
+	if (components > 0)
+	{
+	   eigen_values = es.eigenvalues().reverse().head(components);  
+	   feature_vector = MatrixXf(covariance_matrix.rows(), components);
+	   for (int i=0; i<components; i++)
+	   {
+		 feature_vector.col(i) = es.eigenvectors().col(covariance_matrix.rows()-1 - i);
+	   }   
+	}
+
+	//cout << "Eigenvalues are: " << endl << eigen_values << endl;
+	//cout << "Eigenvectors are: " << endl << feature_vector << endl;
+}
+
+// compute eigenvectors of reduced size covariance matrix
+void PCA::computeFeatureVectorT(int components)
+{
+	//<OPTIM> no need to create a new feature_vector in the header, you can just use it temporarly
+	computeFeatureVector(components);
+	//<OPTIM> maybe it can be turned into a single matrix multiplication
+	feature_vector_t = MatrixXf (zero_mean_data.rows(), feature_vector.cols());
+	// compute eigen vectors of reduced covariace matix to match the dimensions of the original data
+	for(int i=0; i<feature_vector.cols();i++)
+	{
+	feature_vector_t.col(i) = zero_mean_data * feature_vector.col(i);
+	// normalize so that the vectors are orthonormal - each of magnitude 1 and at right angles between each other
+	feature_vector_t.col(i).normalize();
+	}
+}
+//** The Redux Methods will drop high ranked principal components instead of lower ranked
+// pass in the number of principal components to drop
+void PCA::computeFeatureVectorRedux(int components)
+{
+	computeFeatureVector();
+	// <OPTIM> bad memory management
+	MatrixXf temp; VectorXf temp2;
+	temp = feature_vector.block(0, components, feature_vector.rows(), feature_vector.cols()-components);
+	temp2 = eigen_values.bottomRows(eigen_values.rows()-components); //tail(eigen_values.size()-components);
+	feature_vector = temp; eigen_values = temp2; //feature_vector.rightCols(feature_vector.cols()-components);
+	//cout << "REDUX >>" << endl << "Eigenvectors are: " << endl << feature_vector << endl;
+}
+
+void PCA::computeFeatureVectorReduxT(int components)
+{
+	computeFeatureVectorT();
+	MatrixXf temp; VectorXf temp2;
+	temp = feature_vector_t.block(0, components, feature_vector_t.rows(), feature_vector_t.cols()-components);
+	temp2 = eigen_values.bottomRows(eigen_values.rows()-components);
+	feature_vector_t = temp; eigen_values = temp2;
+}
+
+
+MatrixXf* PCA::getFeatureVector() { return &feature_vector; }
+
+// <!> only to be used when computing Pearson's correlation coefficient
+//unoptimized version of transforming the data
+void PCA::transformData(Matrix<float, Dynamic, Dynamic>* data)
+{
+	// <OPTIM> zero mean data has been previously computed, store that and use, instead of computing again
+	MatrixXf zero_mean_data_(data->rows(), data->cols());
+	// Compute means and store them to be added at a later stage
+	data_mean = VectorXf(data->rows()); 
+	for (int i=0; i<data->rows(); i++)
+	{
+		data_mean(i) = data->row(i).mean();
+		zero_mean_data_.row(i) = data->row(i).array() - data_mean(i);
+	}
+    transformed_data = feature_vector.transpose() * zero_mean_data_;
+}
+
+// optimized version of transforming data
+void PCA::transformData2()
+{
+    transformed_data = feature_vector.transpose() * zero_mean_data;
+}
+
+// transforming data on the eigenvectors of the reduced covariance marix
+void PCA::transformData2T()
+{
+	transformed_data = feature_vector_t.transpose() * zero_mean_data;
+}
+
+void PCA::transformData2(MatrixXf* data)
+{
+	zero_mean_data.resize(data->rows(), data->cols());
+	// subtract mean vector from original data
+	for (int i=0; i<data->rows(); i++)
+	{
+	 zero_mean_data.row(i) = data->row(i).array() - data_mean(i);
+	}
+    transformed_data = feature_vector.transpose() * zero_mean_data;
+}
+
+// transforming data on the eigenvectors of the reduced covariance marix
+void PCA::transformData2T(MatrixXf* data)
+{
+	zero_mean_data.resize(data->rows(), data->cols());
+	// subtract mean vector from original data
+	for (int i=0; i<data->rows(); i++)
+	{
+	 zero_mean_data.row(i) = data->row(i).array() - data_mean(i);
+	}
+	transformed_data = feature_vector_t.transpose() * zero_mean_data;
+}
+
+Matrix<float, Dynamic, Dynamic, RowMajor>* PCA::getTransformedData() { return &transformed_data; }
+
+void PCA::reexpressData()
+{
+	reexpressed_data = feature_vector * transformed_data;
+	// add original mean
+	for(int i=0; i<reexpressed_data.rows(); i++)
+	{
+	reexpressed_data.row(i).array() += data_mean(i);
+	}	
+}
+
+void PCA::reexpressDataT()
+{
+	reexpressed_data = feature_vector_t * transformed_data;
+	// add original mean
+	for(int i=0; i<reexpressed_data.rows(); i++)
+	{
+	reexpressed_data.row(i).array() += data_mean(i);
+	}	
+}
+
+MatrixXf* PCA::getReexpressedData() { return &reexpressed_data; }
+
+
+// <!> edit this so that it can take set of data with more observations
+void PCA::projectData(MatrixXf* data)
+{
+	projected_data = feature_vector_t.transpose() * ((*data) - data_mean);
+}
+
+// caluculates the distance between the original observation projected and the reduced dimensionlaty re-expression
+void PCA::distanceToSpace(MatrixXf* data)
+{
+	float distance = 0;
+	projectData(data);
+    distance = ((feature_vector_t * projected_data) - ((*data) - data_mean)).norm();
+	cout << "Distance to space is: " << distance << endl;
+}
+
+// computes all dinstances between the projected observation and the transformed observations
+void PCA::computeDistances()
+{
+	float distance = 0;
+	for (int i=0; i<transformed_data.cols(); i++)
+	{
+		distance = (float) (projected_data - transformed_data.col(i)).norm();
+		cout << "Distance to sample " << i+1 << "is: " << distance << endl;
+	}
+}
+
+
+///// <!> deprecated
+void PCA::process(MatrixXf* input)
+{
+  // very inefficient atm
+  mean = input->mean();
+  zero_mean_data = input->array() - mean;  // <OPTIM> because memory is allocated every time (?) this assignment might be very computationally expensive
+  standard_deviation = sqrt(zero_mean_data.squaredNorm()/zero_mean_data.size());
+  //cout << data << endl;
+}
+float PCA::getMean()	             { return mean; }
+float PCA::getStandardDeviation() { return standard_deviation; }
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                  spectralFlux.h     		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+#pragma once
+
+#include <cmath>
+#include "ofxMaxim.h"
+#include <Eigen/Dense>
+#include "PCA.h"
+#include <vector>
+#include <iostream>
+
+
+using namespace std;
+using namespace Eigen;
+
+class spectralFlux {
+private:
+	// <&> positive and negative flux
+	//***********************************
+
+	// FFT
+	int WINDOW_SIZE;
+	int BINS_SIZE; // half the window size
+	int HOP_SIZE;
+	ofxMaxiFFT fft;
+
+	// SPECTRAL FLUX
+	float* lastFFT;
+	float diff; // difference between successive bins
+	float* flux_sig; // for flux signature
+
+	int flux_history_length; // dependent on the length of the samples
+	RowVectorXf flux_history_matrix; // float*  flux_history; 
+	//float** flux_sig_history;
+	
+	// THRESHOLDING
+	int flux_average_length;
+	int flux_std_length;
+
+	float flux_threshold;
+	float* flux_threshold_history; // maybe turn into eigen matrix
+	float precision;
+	float multiplier;
+	MatrixXf buffer;
+
+	// PEAK-PICKING
+	float time_resolution; // the skip time of the onset peak picking algortithm - in milliseconds
+	int resolution_frames;
+	
+	vector<unsigned int> onsets;
+	float* prunned_flux;
+	//FFT frames
+	MatrixXf fft_data;
+	MatrixXf onsets_fft;
+
+	
+public:
+	spectralFlux(int HOP_SIZE, int WINDOW);
+	// <!> NORMALIZE SAMPLE SET
+
+	//<!> Create methods returning EigenVectors/Matrices
+	void computeFFTData(short* samples, int length, bool scale=false);
+	void computeFFTData(ofxMaxiSample* sample, bool scale=false);
+	MatrixXf* getFFTData();
+	
+	//<!> MUST BE CALLED FOR EACH NEW SPECTRAL FRAME dictated by the HOP size of the FFT
+	float  getFlux    (float* fft);
+	float* getFluxSig (float* fft);
+
+	// <OPTIM> these functions might take longer to compute - TODO perform benchmarks when assigning variables to Eigenvectors
+	void computeFlux (short* samples, int length);
+	void computeFlux (ofxMaxiSample* sample);	
+	void computeFluxOff();
+
+	float*    getFluxHistory();
+	RowVectorXf* getFluxHistoryM();
+	float getThreshold(int flux_frame);
+	float getThreshold2(int frame);
+	void computeFluxThreshold(bool type=false);
+	float* getFluxThresholdHistory();
+	
+	// PARAMETERS
+	void setPrecision(float p); // the scaling of the standard deviation
+	void setStdAvgLength(int l); // the buffer length
+	void setMeanMult(float m); // scaling for the threshold multiplier
+	void setMeanAvgLength(int l); // buffer length of the average
+
+	void computePrunnedFlux();
+	float* getPrunnedFlux();
+
+	void findFluxOnsets();
+	vector<unsigned int>* getOnsets();
+
+	void computeOnsetsFFT();
+	MatrixXf* getOnsetsFFT();
+
+	int getBinsSize();
+	int getHopSize();
+	//
+	void updateTail();
+	void computeFluxSig(short* samples, int length);
+	void computeFluxSig(ofxMaxiSample* sample);
+	float** getFluxSigHistory();
+};
+
+
+//----------------------------------------------------
+////////////////////////////////////////////////////
+//************************************************//
+//                spectralFlux.cpp     		  //
+//************************************************//
+////////////////////////////////////////////////////
+//----------------------------------------------------
+
+#include "spectralFlux.h"
+
+/// Initialize variables
+spectralFlux::spectralFlux(int HOP_SIZE_, int WINDOW)
+{
+	HOP_SIZE = HOP_SIZE_;
+	WINDOW_SIZE = WINDOW; // for maximilian same as fft size
+	BINS_SIZE = WINDOW_SIZE/2; // half the fft size
+	//init FFT
+	fft.setup(WINDOW_SIZE, WINDOW_SIZE, HOP_SIZE);
+	lastFFT = new float[BINS_SIZE]; for (int i=0; i<BINS_SIZE; i++) lastFFT[i] = 0; // initialize fft
+	flux_sig = new float[BINS_SIZE];
+	flux_threshold = 0; // init 
+	diff = 0; // the difference between two succesive fft frames
+	          // it will range between 0 and the maximum amplitude of the fft bins
+	/*************************************************************/
+	flux_average_length = 6; // the number of flux frames over which the mean for the threshold is calculated
+	flux_std_length = 30; // the number of flux frames over which the standard deviation for the threshold is calculated
+   	precision = 0.7; // the scaling of the standard deviation
+	multiplier = 1.3; // scaling for the mean to avoid detecting small peaks over sections with very low energy
+	//<!> does not work well with tunes that have very high energy
+
+	time_resolution = 70; // the minimum time separation between succesive onsets
+	resolution_frames = (int) (time_resolution/(HOP_SIZE*1000/44100.0));
+	cout << " resolution_frames: " << resolution_frames << endl;
+}
+
+int spectralFlux::getBinsSize() { return BINS_SIZE; }
+int spectralFlux::getHopSize() { return HOP_SIZE; }
+
+// pre-compute fft frames for an audio file
+void spectralFlux::computeFFTData(short* samples, int length, bool scale)
+{
+	// 
+	int observations = 0;
+	observations = (int)(length/HOP_SIZE)+1;
+	cout << "The FFT array has " << observations << " frames." << endl;
+	fft_data = MatrixXf(BINS_SIZE, observations);
+	//VectorXf fft(BINS_SIZE, 1); 
+	Map<MatrixXf> fft_(fft.magsToDB(), BINS_SIZE, 1);
+	int count = 0;
+	
+	for (long i=0; i<length; i++)
+    {
+	  // fill buffer with samples
+	  fft.process(samples[i]/32767.0); // <OPTIM> process method to be passed in larger chunks of data
+	  // when hop size is reached store fft frame into the matrix
+	  if (i % HOP_SIZE == 0) // <OPTIM> maybe different if stamement
+	  {
+	     fft.magsToDB();
+	     fft_data.col(count) = fft_;
+		 // is scale is true adjust range to vary from 0 to 1 <REDUNDANT>
+		 if (scale) fft_data.col(count) = fft_data.col(count).array() / (float) fft_data.col(count).maxCoeff();
+	     count++;
+ 	  }  
+    }	
+}
+
+void spectralFlux::computeFFTData(ofxMaxiSample* sample, bool scale)
+{
+	computeFFTData(sample->temp,sample->length, scale); 
+}
+
+MatrixXf* spectralFlux::getFFTData() { return &fft_data; }
+
+
+void spectralFlux::setPrecision(float p) { precision = p; }
+void spectralFlux::setStdAvgLength(int l) { flux_std_length = l; }
+void spectralFlux::setMeanMult(float m) { multiplier = m; }
+void spectralFlux::setMeanAvgLength(int l) {flux_average_length = l; }
+
+// realtime function for calculating flux
+float spectralFlux::getFlux(float* fft)
+{
+	// <!> flux is being computed using both negative and positive direction
+	// might be inappropriate for onset detection
+	float flux_t = 0;
+	for(int i=0; i<BINS_SIZE;i++)
+	{
+	  flux_t += abs(fft[i] - lastFFT[i]);
+	}
+	flux_t /= BINS_SIZE;
+    for(int i=0; i<BINS_SIZE; i++) lastFFT[i] = fft[i];
+	return flux_t; //
+}
+
+// <REDUNDANT>
+// stores spectral flux function into a vector by computing the fft data under the same method
+void spectralFlux::computeFlux(short* samples, int length)
+{
+
+  flux_history_length = (int)(length/HOP_SIZE) + 1; //<!> some matching problems might arise here
+  flux_history_matrix = RowVectorXf(flux_history_length);
+  
+  // the two for loops are separated for optimization - to avoid an if-statement check each itteration
+  int count = 0;
+  for (int i=0; i<WINDOW_SIZE; i++)
+  {
+	  // we need two fft frames to calculate the flux so wait until a window is filled
+	  fft.process(samples[i]/32767.0);
+	  if (i % HOP_SIZE == 0)
+	  {
+	   flux_history_matrix(count) = 0; // no flux for first few frames until a window is processed
+	   count++;	 
+	  }
+  }   
+  for (long i=WINDOW_SIZE; i<length; i++)
+  {
+	  fft.process(samples[i]/32767.0); // <OPTIM> process method to be passed in buffers of audio instead of single samples
+	  
+	  if (i % HOP_SIZE == 0) // <OPTIM> maybe different if stamement
+	  {
+       //<!> first flux frame is VEERY HIGH - TO FIX
+	   flux_history_matrix(count) = getFlux(fft.magsToDB());
+	   count++;
+ 	  }  
+  }
+}
+
+// non-realtime method for cumputing the flux function the uses the precomputed fft frames
+void spectralFlux::computeFluxOff()
+{
+  flux_history_length = fft_data.cols();//(int)(length/HOP_SIZE) + 1; //<!> some matching problems might arise here
+  flux_history_matrix = RowVectorXf(flux_history_length);
+  flux_history_matrix(0) = 0; // set first flux value to zero
+  
+  // DO NOT compute the flux value for the first index
+  for (int i=1; i<flux_history_length; i++)
+  {
+	 // compute the difference between two succesive frames, take the absolute, sum the together and divide by the number bins
+	 // all done in one line thank to Eigen reductions
+	 flux_history_matrix(i) = (fft_data.col(i) - fft_data.col(i-1)).array().abs().sum()/BINS_SIZE;
+  }
+}
+
+void spectralFlux::computeFlux(ofxMaxiSample* sample)
+{
+	computeFlux(sample->temp,sample->length); 
+}
+
+float* spectralFlux::getFluxHistory()
+{
+	return &flux_history_matrix(0);
+}
+
+RowVectorXf* spectralFlux::getFluxHistoryM()
+{
+ return &flux_history_matrix;
+}
+
+
+// calculates the threshold only using the data before the frame
+float spectralFlux::getThreshold(int frame)
+{
+	// to avoid stepping out of the array at the beggining of analysis
+	if (frame-flux_std_length >= 0)
+	{
+	//<OPTIM> avoid this array creation
+	//<OPTIM> set maxMatrix size - look into Eigen reference
+	
+	//<!> standard deviation only makes sense when calculated across larger buffers
+	// GRAB BUFFER FOR STANDARD DEVIATION
+	buffer = flux_history_matrix.block(0, frame-flux_std_length, 1, flux_std_length); 
+	// GRAB BUFFER FOR THE AVERAGE
+	flux_threshold = flux_history_matrix.block(0, frame-flux_average_length, 1, flux_average_length).mean() * multiplier +
+		             PCA::getStdDev(&buffer) * precision;
+	} else // <!> can be improved so that the buffer increases gradually
+	  { flux_threshold = 1000; } // set to a value that wil never be reached
+
+	return flux_threshold; // <!> maybe return as pointer
+}
+// <REDUNDANT>
+// calculates the threshold around the frame - half of before, half ahead
+float spectralFlux::getThreshold2(int frame)
+{
+	// to avoid stepping out of the array at the beggining and end of flux array
+	if (frame-flux_std_length >= 0 && (frame+(flux_average_length/2)+1) < flux_history_matrix.cols())
+	{
+	//<OPTIM> avoid this array creation
+	//<OPTIM> set maxMatrix size - look into Eigen reference
+	buffer = flux_history_matrix.block(0, frame-flux_std_length, 1, flux_std_length); 
+	//pca.process(&buffer);
+	//<!> standard deviation only makes sense when calculated across larger buffers
+	//flux_threshold = buffer.mean() * multiplier + pca.getStandardDeviation() * precision;
+	flux_threshold = flux_history_matrix.block(0, frame-(int)(flux_average_length/2), 1, flux_average_length).mean() * multiplier +
+		             PCA::getStdDev(&buffer) * precision;
+	} else // <!> can be improved so that the buffer increases gradually
+	  { flux_threshold = 1000; } // set to a threshold that will never be reached
+
+	return flux_threshold; // <!> maybe return as pointer
+}
+
+// computes the adaptive threshold values across the entire flux function
+// and stores them in the vector flux_threshold
+void spectralFlux::computeFluxThreshold(bool type)
+{
+	flux_threshold_history = new float[flux_history_length];
+	if (!type)
+	{
+		for(int i=0; i<flux_history_length; i++)
+		{
+			flux_threshold_history[i] = getThreshold(i);
+		}
+	} else
+	{
+        for(int i=0; i<flux_history_length; i++)
+		{
+			flux_threshold_history[i] = getThreshold2(i);
+		}
+	}
+}
+
+float* spectralFlux::getFluxThresholdHistory() { return flux_threshold_history; }
+
+// the prunned flux the flux function with the threshold subtracted
+// 
+void spectralFlux::computePrunnedFlux()
+{
+  prunned_flux = new float[flux_history_length];
+
+  // run through the whole vectors
+  for (int i=0; i<flux_history_length; i++)
+  {
+    if (flux_history_matrix(i) > flux_threshold_history[i]) 
+	{
+	// if the flux exceeds the threshold, compute the difference
+    prunned_flux[i] = flux_history_matrix(i) - flux_threshold_history[i];
+	} else // otherwise set to zero
+	  {
+       prunned_flux[i] = 0;
+	  }
+  }
+}
+
+float* spectralFlux::getPrunnedFlux() { return prunned_flux; }
+
+void spectralFlux::findFluxOnsets()
+{
+	/// clear the vector first, in case function is used more than once
+	onsets.clear();
+	int count=0;
+	while (count<flux_history_length-1)
+	{
+		if(prunned_flux[count] > prunned_flux[count+1])
+		{// ONSET DETECTED
+         // store onset index
+	    onsets.push_back(count);
+		//count++;
+ 		count+= resolution_frames; // resolution frames is the number of frames skipped (under the assumption
+		                           // that there will never be more than one onset in a certain interval
+		continue;
+		}
+	 count++;
+	}
+
+	cout << "Number of Onsets: " << onsets.size() << endl;
+}
+
+vector<unsigned int>* spectralFlux::getOnsets() { return &onsets; }
+
+// grabs the fft frames for associated with each onset
+void spectralFlux::computeOnsetsFFT()
+{
+	onsets_fft = MatrixXf(fft_data.rows(), onsets.size());
+
+	for (int i=0; i<onsets.size();i++)
+	{
+		if ((onsets[i]+1) >= 0 && (onsets[i]+1) <= fft_data.cols())
+		{
+		onsets_fft.col(i) = fft_data.col(onsets[i]+1);
+		} else
+		  {
+		   onsets_fft.col(i) = VectorXf::Zero(onsets_fft.rows());
+		  }
+	}
+}
+
+MatrixXf* spectralFlux::getOnsetsFFT() { return &onsets_fft; }
+
+
+// <!> revise thorughly - bins_size variable
+float* spectralFlux::getFluxSig(float* fft)
+{
+	// <!> flux is being computed using both negative and positive direction
+	// might be inappropriate for onset detection
+	for(int i=0; i<BINS_SIZE;i++)
+	{
+	  diff = fft[i] - lastFFT[i];
+ 	  flux_sig[i] = abs(diff);
+	}
+    for(int i=0; i<BINS_SIZE; i++) lastFFT[i] = fft[i];
+/*
+	// delay line 
+	for (int i=1; i<tail_length; i++)
+	{
+     fluxes[i-1] = fluxes[i];
+	}
+
+	fluxes[tail_length-1] = flux;
+*/
+	return flux_sig; //
+}
+
+
+
+
+
+
+
+

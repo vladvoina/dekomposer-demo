@@ -13,31 +13,25 @@ using namespace Eigen;
 
 class spectralFlux {
 private:
-	// <!> make sure you are computing the flux in steps as close as possible to eachother
-	// <!> be careful when reading stero signal with panning
-	// <!> maybe analyse panninG
-	// <&> add flux grouping
-	// <&> add several types of flux analysers depending on the outcome or application
 	// <&> positive and negative flux
 	//***********************************
 
 	// FFT
 	int WINDOW_SIZE;
-	int BINS_SIZE; // half the fft size
+	int BINS_SIZE; // half the window size
 	int HOP_SIZE;
 	ofxMaxiFFT fft;
 
 	// SPECTRAL FLUX
-	float* flux_sig;
 	float* lastFFT;
 	float diff; // difference between successive bins
+	float* flux_sig; // for flux signature
 
 	int flux_history_length; // dependent on the length of the samples
 	RowVectorXf flux_history_matrix; // float*  flux_history; 
 	//float** flux_sig_history;
 	
 	// THRESHOLDING
-	// no need for an instance of PCA, create static methods for computing mean and std deviation
 	int flux_average_length;
 	int flux_std_length;
 
@@ -48,7 +42,7 @@ private:
 	MatrixXf buffer;
 
 	// PEAK-PICKING
-	float time_resolution; // the temporal detail of the onset peak picking algortithm - in milliseconds
+	float time_resolution; // the skip time of the onset peak picking algortithm - in milliseconds
 	int resolution_frames;
 	
 	vector<unsigned int> onsets;
@@ -82,11 +76,12 @@ public:
 	float getThreshold2(int frame);
 	void computeFluxThreshold(bool type=false);
 	float* getFluxThresholdHistory();
-	// set precision standard deviation
-	void setPrecision(float p);
-	void setStdAvgLength(int l);
-	void setMeanMult(float m);
-	void setMeanAvgLength(int l);
+	
+	// PARAMETERS
+	void setPrecision(float p); // the scaling of the standard deviation
+	void setStdAvgLength(int l); // the buffer length
+	void setMeanMult(float m); // scaling for the threshold multiplier
+	void setMeanAvgLength(int l); // buffer length of the average
 
 	void computePrunnedFlux();
 	float* getPrunnedFlux();

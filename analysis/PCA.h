@@ -19,12 +19,12 @@ private:
 	MatrixXf feature_vector;    // matrix contaning the reduced or full number of eigenvectors stored in columns in descending order
 	MatrixXf feature_vector_t;  // same as above for the optimized reduced covariance matrix
 	MatrixXf eigen_values;      // vector for storing the eigenvalues
-	//MatrixXf transformed_data;  // expression of original data onto the new eigenvectors basis
-	Matrix<float, Dynamic, Dynamic, RowMajor> transformed_data;
+	//MatrixXf transformed_data;  
+	Matrix<float, Dynamic, Dynamic, RowMajor> transformed_data; // expression of original data onto the new eigenvectors basis
 	MatrixXf reexpressed_data;  // re-expression onto original coordinate system - if no dimensions are reduced data should be exactly the same
-	MatrixXf projected_data;    // projected data
+	MatrixXf projected_data;    // matrix to store on onservation of data that is used in the computeDistances() method
 	
-	VectorXf data_mean;
+	VectorXf data_mean; // mean vector containing the mean of each row
 	float mean;
 	float standard_deviation;
 	
@@ -35,21 +35,27 @@ public:
 	PCA();
 	void process(MatrixXf* data);  // <!> deprecated
 	float getMean();			   // <!> deprecated
-	float getStandardDeviation();  
-	// STATIC METHODS
+	float getStandardDeviation();  // <!> deprecated 
+	
+	// STATIC METHOD
+	// calculates the standard deviation of the input vector
 	static float getStdDev(MatrixXf* input)
 	{
 	  return sqrt((input->array() - input->mean()).matrix().squaredNorm()/input->size());
 	}
-	// initial functions
+
+	// original functions <!> deprecated
 	float getCovariance(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y);
 	float getCorrelation(Matrix<float, 1, Dynamic>* X, Matrix<float, 1, Dynamic>* Y);
 	void computeCovarianceMatrix(Matrix<float, Dynamic, Dynamic>* data);
 	void computeCorrelationMatrix(Matrix<float, Dynamic, Dynamic>* data);
+	
 	// optimized functions
-	void computeMeanVector(MatrixXf* data);
-	void computeCovarianceMatrix2 (MatrixXf* data);
-	void computeCovarianceMatrix2T(MatrixXf* data);
+	void computeMeanVector(MatrixXf* data); //
+	void computeCovarianceMatrix2 (MatrixXf* data); // compute covariance matrix <- use if number of observations
+													// is higher than the number of dimensions
+	void computeCovarianceMatrix2T(MatrixXf* data); // compute reduced covariance matrix <- use if number of observations
+													// is smaller than the number of dimensions
 	MatrixXf* getCovarianceCorrelationMatrix();
 	
 	// 0 for all components, positive for first highest, negative how many to drop from the end

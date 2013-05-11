@@ -1,7 +1,6 @@
 #include "kMeans.h"
 
 //passed in data must be organized into rows-dimensions, cols-observations and MUST be a matrix in RowMajor
-
 void kMeans::cluster(Matrix<float, Dynamic, Dynamic, RowMajor>* dataa, int clusters)
 {
   // ** create new matrix of transposed, cast input data ** //
@@ -9,7 +8,7 @@ void kMeans::cluster(Matrix<float, Dynamic, Dynamic, RowMajor>* dataa, int clust
   (*temp_data) = dataa->transpose().cast<double>(); 
   const int nrows = temp_data->rows();
   const int ncols = temp_data->cols();
-  // ** create pointer to matrix data ** //
+  // ** create pointer to the data within the matrix ** //
   double** data_pointer;
   data_pointer = (double**) malloc(temp_data->rows()*sizeof(double*));
   for (int i=0; i<temp_data->rows(); i++) data_pointer[i] = &(*temp_data)(i, 0);
@@ -36,7 +35,7 @@ void kMeans::kmeans(int nrows, int ncols, double** data, int** mask, int cluster
   int i, j;
   const int nclusters = clusters;
   const int transpose = 0;
-  const char dist = 'e'; // 
+  const char dist = 'e'; // euclidean distance
   const char method = 'a';
   int npass = 1;
   int ifound = 0;
